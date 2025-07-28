@@ -1,10 +1,13 @@
-import asyncio
+"""Zendesk MCP Server package"""
 
-from . import server
+import asyncio
 
 
 def main():
-    asyncio.run(server.main())
+    """Entry point for the Zendesk MCP server"""
+    from .server import main as server_main
+    asyncio.run(server_main())
 
 
-__all__ = ["main", "server"]
+__version__ = "0.1.0"
+__all__ = ["main"]

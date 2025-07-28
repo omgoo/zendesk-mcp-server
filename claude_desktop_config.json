@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "zendesk": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/ABSOLUTE/PATH/TO/zendesk-mcp-server",
+        "run",
+        "zendesk"
+      ],
+      "env": {
+        "ZENDESK_SUBDOMAIN": "your-subdomain",
+        "ZENDESK_EMAIL": "your-email@company.com", 
+        "ZENDESK_API_KEY": "your-api-key"
+      }
+    }
+  }
+} 
