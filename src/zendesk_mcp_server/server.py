@@ -452,6 +452,139 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["user_id"]
             }
+        ),
+        types.Tool(
+            name="get_agent_performance_metrics",
+            description="Get comprehensive agent performance metrics including response times, resolution rates, and satisfaction scores.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "agent_id": {
+                        "type": "integer",
+                        "description": "Agent ID to analyze (optional - if not provided, analyzes all agents)"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date for analysis (YYYY-MM-DD format, default: 30 days ago)"
+                    },
+                    "end_date": {
+                        "type": "string", 
+                        "description": "End date for analysis (YYYY-MM-DD format, default: today)"
+                    },
+                    "include_satisfaction": {
+                        "type": "boolean",
+                        "description": "Include customer satisfaction data (default: true)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_team_performance_dashboard",
+            description="Generate comprehensive team performance dashboard with rankings, workload distribution, and bottleneck identification.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "team_id": {
+                        "type": "integer",
+                        "description": "Team ID to analyze (optional)"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Analysis period",
+                        "enum": ["week", "month", "quarter"],
+                        "default": "week"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="generate_agent_scorecard",
+            description="Create detailed agent scorecard with performance vs targets, strengths, improvement areas, and recommendations.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "agent_id": {
+                        "type": "integer",
+                        "description": "Agent ID to generate scorecard for"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Scorecard period",
+                        "enum": ["week", "month", "quarter"],
+                        "default": "month"
+                    }
+                },
+                "required": ["agent_id"]
+            }
+        ),
+        types.Tool(
+            name="get_agent_workload_analysis",
+            description="Analyze current workload distribution across agents with capacity utilization and imbalance alerts.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "include_pending": {
+                        "type": "boolean",
+                        "description": "Include pending/hold tickets in analysis (default: true)"
+                    },
+                    "include_open": {
+                        "type": "boolean",
+                        "description": "Include open tickets in analysis (default: true)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="suggest_ticket_reassignment",
+            description="Suggest ticket reassignments to balance workload or prioritize urgent tickets.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "criteria": {
+                        "type": "string",
+                        "description": "Reassignment criteria",
+                        "enum": ["workload_balance", "urgent_priority"],
+                        "default": "workload_balance"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_sla_compliance_report",
+            description="Generate comprehensive SLA compliance report with first response and resolution time analysis by priority.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date for analysis (YYYY-MM-DD format, default: 30 days ago)"
+                    },
+                    "end_date": {
+                        "type": "string", 
+                        "description": "End date for analysis (YYYY-MM-DD format, default: today)"
+                    },
+                    "agent_id": {
+                        "type": "integer",
+                        "description": "Agent ID to analyze (optional - if not provided, analyzes all agents)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_at_risk_tickets",
+            description="Identify tickets at risk of SLA breach with time remaining and escalation recommendations.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "time_horizon": {
+                        "type": "integer",
+                        "description": "Time horizon in hours to identify at-risk tickets (default: 24)",
+                        "default": 24,
+                        "minimum": 1,
+                        "maximum": 168
+                    }
+                }
+            }
         )
     ]
 
@@ -633,6 +766,97 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(user_info, indent=2)
+            )]
+
+        elif name == "get_agent_performance_metrics":
+            agent_id = arguments.get("agent_id") if arguments else None
+            start_date = arguments.get("start_date") if arguments else None
+            end_date = arguments.get("end_date") if arguments else None
+            include_satisfaction = arguments.get("include_satisfaction", True) if arguments else True
+            
+            metrics = zendesk_client.get_agent_performance_metrics(
+                agent_id=agent_id,
+                start_date=start_date,
+                end_date=end_date,
+                include_satisfaction=include_satisfaction
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(metrics, indent=2)
+            )]
+
+        elif name == "get_team_performance_dashboard":
+            team_id = arguments.get("team_id") if arguments else None
+            period = arguments.get("period", "week") if arguments else "week"
+            
+            dashboard = zendesk_client.get_team_performance_dashboard(
+                team_id=team_id,
+                period=period
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(dashboard, indent=2)
+            )]
+
+        elif name == "generate_agent_scorecard":
+            if not arguments or "agent_id" not in arguments:
+                raise ValueError("Missing required argument: agent_id")
+            agent_id = arguments["agent_id"]
+            period = arguments.get("period", "month") if arguments else "month"
+            
+            scorecard = zendesk_client.generate_agent_scorecard(
+                agent_id=agent_id,
+                period=period
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(scorecard, indent=2)
+            )]
+
+        elif name == "get_agent_workload_analysis":
+            include_pending = arguments.get("include_pending", True) if arguments else True
+            include_open = arguments.get("include_open", True) if arguments else True
+            
+            analysis = zendesk_client.get_agent_workload_analysis(
+                include_pending=include_pending,
+                include_open=include_open
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(analysis, indent=2)
+            )]
+
+        elif name == "suggest_ticket_reassignment":
+            criteria = arguments.get("criteria", "workload_balance") if arguments else "workload_balance"
+            
+            suggestions = zendesk_client.suggest_ticket_reassignment(criteria=criteria)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(suggestions, indent=2)
+            )]
+
+        elif name == "get_sla_compliance_report":
+            start_date = arguments.get("start_date") if arguments else None
+            end_date = arguments.get("end_date") if arguments else None
+            agent_id = arguments.get("agent_id") if arguments else None
+            
+            report = zendesk_client.get_sla_compliance_report(
+                start_date=start_date,
+                end_date=end_date,
+                agent_id=agent_id
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(report, indent=2)
+            )]
+
+        elif name == "get_at_risk_tickets":
+            time_horizon = arguments.get("time_horizon", 24) if arguments else 24
+            
+            at_risk_tickets = zendesk_client.get_at_risk_tickets(time_horizon=time_horizon)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(at_risk_tickets, indent=2)
             )]
 
         else:
