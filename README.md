@@ -1,324 +1,394 @@
 # Zendesk MCP Server
 
-A comprehensive **Model Context Protocol (MCP)** server for **Zendesk integration** that provides advanced support team management capabilities. This server enables AI assistants like Claude to interact with Zendesk through a rich set of tools for ticket management, analytics, automation, and team optimization.
+A comprehensive Model Context Protocol (MCP) server that provides extensive Zendesk integration capabilities for Claude Desktop and other MCP-compatible clients. This server offers over **55 enterprise-grade tools** for complete support team management.
 
-## 🚀 **Enterprise Features**
+## 🚀 Features
 
-### **🎯 Agent Performance Analytics**
-- **Comprehensive metrics**: Response times, resolution rates, satisfaction scores
-- **Team performance dashboards**: Rankings, workload distribution, bottleneck identification  
-- **Individual scorecards**: Performance vs targets, strengths, improvement areas, personalized recommendations
-- **Historical trends**: Performance tracking over time with multiple period options
+### **Core Zendesk Operations**
+- ✅ Retrieve individual tickets and comments
+- ✅ Create ticket comments with public/private options
+- ✅ Advanced ticket search with Zendesk query syntax
+- ✅ Ticket metrics and analytics
+- ✅ User and organization management
+- ✅ Satisfaction ratings and agent performance tracking
+- ✅ Knowledge base article retrieval
+
+### **🏢 Enterprise Performance Analytics**
+- ✅ **Agent Performance Metrics** - Comprehensive response times, resolution rates, satisfaction scores
+- ✅ **Team Performance Dashboard** - Agent rankings, workload distribution, trend analysis
+- ✅ **Agent Scorecards** - Performance vs targets, improvement areas, historical trends
 
 ### **⚖️ Workload Management**
-- **Real-time workload analysis**: Capacity utilization, overdue tickets, imbalance alerts
-- **Intelligent reassignment**: AI-powered suggestions for optimal ticket distribution
-- **Automated load balancing**: Workload optimization recommendations
-- **Capacity planning**: Agent availability and capacity management
+- ✅ **Agent Workload Analysis** - Active tickets, capacity utilization, imbalance alerts
+- ✅ **Ticket Reassignment Suggestions** - Balance workload, match expertise, optimize assignments
+- ✅ **Agent Group Management** - Assign agents to groups, manage memberships
 
 ### **📊 SLA Monitoring & Compliance**
-- **Comprehensive SLA reporting**: First response and resolution time compliance by priority
-- **At-risk ticket identification**: Proactive breach prevention with time-to-breach calculations
-- **Performance targets**: Configurable SLA targets with compliance tracking
-- **Escalation triggers**: Automatic alerts for SLA violations
+- ✅ **SLA Compliance Reports** - First response and resolution time compliance
+- ✅ **At-Risk Ticket Identification** - Proactive SLA breach prevention
+- ✅ **SLA Policy Management** - View and analyze SLA configurations
 
 ### **🤖 Advanced Automation**
-- **Bulk ticket operations**: Mass updates for status, priority, tags, and assignments
-- **AI-powered categorization**: Automatic ticket tagging based on content analysis
-- **Smart escalation**: Intelligent escalation with stakeholder notifications
-- **Template management**: Automated response templates and macro suggestions
+- ✅ **Bulk Ticket Operations** - Mass updates for status, priority, tags, assignments
+- ✅ **Auto-Categorization** - ML-based ticket categorization and tagging
+- ✅ **Ticket Escalation** - Formalized escalation with notifications
 
-### **📈 Analytics & Insights**
-- **Customer satisfaction tracking**: Score distribution and trend analysis
-- **Knowledge base optimization**: Article effectiveness and usage analytics
-- **Team performance insights**: Bottleneck identification and optimization recommendations
-- **Predictive analytics**: Performance forecasting and capacity planning
+### **🎯 Advanced Ticket Operations**
+- ✅ **Ticket Merging** - Merge multiple tickets into one target ticket
+- ✅ **Ticket Cloning** - Clone tickets with optional comments
+- ✅ **Tag Management** - Add/remove tags from tickets
+- ✅ **Related Tickets** - Find tickets from same requester or with similar tags
 
-## Installation
+### **🏢 Organization & User Management**
+- ✅ **Advanced Organization Tools** - Create, update, search organizations
+- ✅ **User Management** - Create, update, suspend users with role management
+- ✅ **User Identity Management** - Email addresses, phone numbers, verification
+- ✅ **Advanced User Search** - Filter by role, organization, custom criteria
 
-1. **Install dependencies**:
-   ```bash
-   uv sync
-   ```
+### **📋 Custom Fields & Configuration**
+- ✅ **Ticket Fields** - View all ticket fields including custom configurations
+- ✅ **User Fields** - Custom user field management
+- ✅ **Organization Fields** - Custom organization field management
+- ✅ **Ticket Forms** - View and manage ticket form configurations
 
-2. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Zendesk credentials
-   ```
+### **🔍 Advanced Search & Export**
+- ✅ **Multi-Object Search** - Search across tickets, users, organizations
+- ✅ **Search Export** - Export search results for bulk processing
+- ✅ **Advanced Filtering** - Sort options, custom date ranges
 
-3. **Configure Claude Desktop**:
-   Add to your Claude Desktop configuration file:
+### **⚙️ Automation & Business Rules**
+- ✅ **Automations Management** - View automation conditions and actions
+- ✅ **Triggers Management** - View trigger configurations
+- ✅ **Macro Management** - View and apply macros to tickets
 
-   ```json
-   {
-     "mcpServers": {
-       "zendesk": {
-         "command": "uv",
-         "args": [
-           "--directory",
-           "/ABSOLUTE/PATH/TO/zendesk-mcp-server",
-           "run",
-           "zendesk"
-         ],
-         "env": {
-           "ZENDESK_SUBDOMAIN": "your-subdomain",
-           "ZENDESK_EMAIL": "your-email@company.com",
-           "ZENDESK_API_KEY": "your-api-key"
-         }
-       }
-     }
-   }
-   ```
+### **📚 Knowledge Base Integration**
+- ✅ **Help Center Search** - Search articles by content, category, locale
+- ✅ **Article Management** - Retrieve articles by section or category
+- ✅ **Multi-language Support** - Locale-specific content management
 
-## 🛠️ **Complete Tool Reference**
+### **🔍 Audit & Compliance**
+- ✅ **Ticket Audit Logs** - Complete change history for tickets
+- ✅ **Ticket Events** - System events and user actions
+- ✅ **Activity Tracking** - Comprehensive audit trails
 
-### **🎯 Performance Analytics Tools**
+### **👥 Collaboration Features**
+- ✅ **Collaborator Management** - Add/remove CCs, manage ticket access
+- ✅ **Stakeholder Notifications** - Automated stakeholder communication
+- ✅ **User Creation** - Auto-create users for collaboration
 
-#### **`get_agent_performance_metrics`** - Comprehensive Agent Analysis
-```json
-{
-  "agent_id": 123,                    // Optional: specific agent or all agents
-  "start_date": "2025-01-01",        // Optional: analysis start date
-  "end_date": "2025-01-31",          // Optional: analysis end date  
-  "include_satisfaction": true        // Optional: include customer satisfaction data
-}
+### **📈 Advanced Reporting**
+- ✅ **Incremental Data Sync** - Efficient data synchronization
+- ✅ **Detailed Ticket Metrics** - Comprehensive SLA and performance data
+- ✅ **Agent Activity Reports** - Detailed productivity and performance analysis
+
+## 📦 Installation
+
+### Prerequisites
+- Python 3.8+
+- [uv](https://docs.astral.sh/uv/) package manager
+- Zendesk API credentials
+
+### Setup
+
+1. **Clone and install dependencies:**
+```bash
+git clone <repository-url>
+cd zendesk-mcp-server
+uv sync
 ```
-**Returns**: Detailed performance metrics including response times, resolution rates, satisfaction scores, and performance scoring.
 
-#### **`get_team_performance_dashboard`** - Team-Wide Analytics
-```json
-{
-  "team_id": 456,                    // Optional: specific team analysis
-  "period": "month"                  // week, month, quarter
-}
+2. **Configure environment variables:**
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env with your Zendesk credentials
+ZENDESK_SUBDOMAIN=your-subdomain
+ZENDESK_EMAIL=your-email@company.com
+ZENDESK_API_KEY=your-api-key
 ```
-**Returns**: Comprehensive team dashboard with agent rankings, workload distribution, trend analysis, and bottleneck identification.
 
-#### **`generate_agent_scorecard`** - Individual Performance Reports
+3. **Configure Claude Desktop:**
+
+Add this configuration to your Claude Desktop settings file:
+
+**Location:**
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+**Configuration:**
 ```json
 {
-  "agent_id": 123,                   // Required: agent to analyze
-  "period": "month"                  // week, month, quarter
-}
-```
-**Returns**: Detailed scorecard with performance vs targets, strengths, improvement areas, and personalized recommendations.
-
-### **⚖️ Workload Management Tools**
-
-#### **`get_agent_workload_analysis`** - Real-Time Workload Monitoring
-```json
-{
-  "include_pending": true,           // Include pending/hold tickets
-  "include_open": true               // Include open tickets
-}
-```
-**Returns**: Complete workload analysis with capacity utilization, overdue tickets, imbalance alerts, and redistribution recommendations.
-
-#### **`suggest_ticket_reassignment`** - Intelligent Load Balancing
-```json
-{
-  "criteria": "workload_balance"     // workload_balance, urgent_priority
-}
-```
-**Returns**: AI-powered reassignment suggestions with specific ticket recommendations and balancing rationale.
-
-### **📊 SLA Monitoring Tools**
-
-#### **`get_sla_compliance_report`** - Comprehensive SLA Analysis
-```json
-{
-  "start_date": "2025-01-01",       // Optional: report start date
-  "end_date": "2025-01-31",         // Optional: report end date
-  "agent_id": 123                    // Optional: specific agent analysis
-}
-```
-**Returns**: Detailed SLA compliance report with first response and resolution time analysis by priority level.
-
-#### **`get_at_risk_tickets`** - Proactive SLA Management
-```json
-{
-  "time_horizon": 24                 // Hours ahead to identify at-risk tickets
-}
-```
-**Returns**: List of tickets at risk of SLA breach with time remaining, risk factors, and escalation recommendations.
-
-### **🤖 Advanced Automation Tools**
-
-#### **`bulk_update_tickets`** - Mass Ticket Operations
-```json
-{
-  "ticket_ids": [123, 456, 789],
-  "updates": {
-    "status": "pending",
-    "priority": "high",
-    "assignee_id": 456,
-    "tags": {
-      "action": "add",               // add, remove, set
-      "values": ["urgent", "escalated"]
+  "mcpServers": {
+    "zendesk": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/zendesk-mcp-server", "run", "zendesk"],
+      "env": {
+        "ZENDESK_SUBDOMAIN": "your-subdomain",
+        "ZENDESK_EMAIL": "your-email@company.com", 
+        "ZENDESK_API_KEY": "your-api-key"
+      }
     }
-  },
-  "reason": "Bulk escalation for system outage"
-}
-```
-**Returns**: Detailed results of bulk update operation with success/failure tracking.
-
-#### **`auto_categorize_tickets`** - AI-Powered Categorization
-```json
-{
-  "ticket_ids": [123, 456],         // Optional: specific tickets or recent untagged
-  "use_ml": true                     // Enable ML-based categorization
-}
-```
-**Returns**: Categorization results with suggested tags, confidence levels, and application status.
-
-#### **`escalate_ticket`** - Smart Escalation Management
-```json
-{
-  "ticket_id": 123,                  // Required: ticket to escalate
-  "escalation_level": "manager",     // manager, senior_agent, external
-  "reason": "Complex technical issue requiring expertise",
-  "notify_stakeholders": true        // Send notifications
-}
-```
-**Returns**: Escalation tracking with applied updates, notifications sent, and next steps.
-
-### **📋 Core Ticket Management Tools**
-
-#### **`search_tickets`** - Advanced Search with Performance Optimization
-```json
-{
-  "query": "status:open priority:high",
-  "sort_by": "created_at",           // created_at, updated_at, priority, status
-  "sort_order": "desc",              // asc, desc
-  "compact": true                    // Minimal data for better performance
+  }
 }
 ```
 
-#### **`get_ticket_counts`** - Ticket Statistics Overview
-```json
-{}
+4. **Restart Claude Desktop** to load the new server.
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ZENDESK_SUBDOMAIN` | Your Zendesk subdomain (without .zendesk.com) | `mycompany` |
+| `ZENDESK_EMAIL` | Admin email for API access | `admin@company.com` |
+| `ZENDESK_API_KEY` | API key from Zendesk Admin Center | `abc123...` |
+
+### Getting Zendesk API Credentials
+
+1. **Log in to Zendesk Admin Center**
+2. **Navigate to:** Apps and integrations > APIs > Zendesk API
+3. **Enable Token Access** (if not already enabled)
+4. **Create API Key:** Click "+" next to "Active API Tokens"
+5. **Copy the generated token** - this is your `ZENDESK_API_KEY`
+
+## 📖 Usage Examples
+
+### Basic Operations
+```
+# Get ticket information
+"Show me ticket #12345"
+
+# Search for tickets
+"Find all high priority tickets created in the last week"
+
+# Check agent performance  
+"What's the performance of agent John Smith this month?"
 ```
 
-#### **`get_user_by_id`** - User Information Resolution
-```json
-{
-  "user_id": 123
-}
+### Enterprise Analytics
+```
+# Team performance analysis
+"Generate a team performance dashboard for the last quarter"
+
+# Workload analysis
+"Show me the current workload distribution across all agents"
+
+# SLA compliance
+"Generate an SLA compliance report for last month"
 ```
 
-## 🎭 **Guided Prompts & Templates**
-
-The server includes intelligent prompt templates for common scenarios:
-
-- **`analytics-dashboard`**: Generate comprehensive team performance reports
-- **`search-tickets`**: Advanced ticket search with query assistance
-- **`analyze-user-workload`**: User-specific workload analysis
-- **`agent-performance`**: Individual agent performance evaluation
-
-## 🔍 **Advanced Search Syntax**
-
-### **Performance-Optimized Queries**
+### Advanced Operations
 ```
-# Use compact mode for large datasets
-"status:open priority:urgent" + compact: true
+# Bulk operations
+"Update all tickets tagged 'billing' to high priority"
 
-# Time-based analysis
-"created>2025-01-01 updated<2025-01-31"
+# Agent management
+"Assign user ID 12345 to the support group"
 
-# Agent-specific performance
-"assignee:agent@company.com status:solved"
-
-# SLA monitoring
-"created>24hours status:new"
+# Ticket operations
+"Merge tickets 100, 101, 102 into ticket 99"
 ```
 
-### **Workload Management Queries**
+### Search and Analysis
 ```
-# Overloaded agents
-"assignee_id:123 (status:open OR status:pending)"
+# Advanced search
+"Search for all users in organization 'Acme Corp' with agent role"
 
-# Unassigned urgent tickets
-"status:new priority:urgent assignee:none"
+# Export data
+"Export all tickets from last month for reporting"
 
-# Escalated tickets
-"tags:escalated status:open"
+# Knowledge base
+"Search the help center for articles about password reset"
 ```
 
-## 📊 **Performance Optimization**
+## 🔍 Search Query Syntax
 
-### **Handling Large Datasets**
-- **Use compact mode**: Set `compact: true` for search operations
-- **Limit time ranges**: Use focused date ranges for analytics
-- **Batch operations**: Bulk updates process up to 100 tickets efficiently
-- **Caching**: Automatic caching for knowledge base and user data
+The server supports Zendesk's powerful search syntax:
 
-### **Rate Limit Management**
-- **Automatic throttling**: Built-in rate limit handling
-- **Optimized queries**: Efficient API usage patterns
-- **Batch processing**: Grouped operations to minimize API calls
+### Ticket Searches
+```
+status:open priority:high
+type:incident created>2024-01-01
+assignee:john@company.com tags:billing
+organization:"Acme Corp" updated<2024-12-01
+```
 
-## 🚨 **Troubleshooting**
+### User Searches  
+```
+type:user role:agent
+organization:12345 email:*@company.com
+created>2024-01-01 active:true
+```
 
-### **Performance Issues**
-1. **"Result exceeds maximum length"**:
-   - Use `compact: true` in search queries
-   - Reduce time ranges for analytics
-   - Use specific agent or team filters
+### Advanced Filters
+```
+# Date ranges
+created>=2024-01-01 created<=2024-12-31
 
-2. **Slow response times**:
-   - Enable caching for repeated queries
-   - Use batch operations for multiple updates
-   - Consider shorter analysis periods
+# Multiple values
+status:open OR status:pending
+priority:high OR priority:urgent
 
-### **Agent Performance Analysis**
-For questions like "Who is the best performing support agent?":
+# Exclusions  
+-status:closed -tags:spam
 
-1. **Use optimized tools**: `get_agent_performance` instead of large search queries
-2. **Follow up with details**: Use `get_user_by_id` to resolve agent names
-3. **Adjust time periods**: Use `days` parameter (1-90) to focus analysis
-4. **Check permissions**: Ensure API token can access user and metrics data
+# Wildcards
+subject:*password* email:*@domain.com
+```
 
-### **SLA Monitoring**
-For SLA compliance tracking:
+## ⚡ Performance Features
 
-1. **Regular monitoring**: Use `get_at_risk_tickets` for proactive management
-2. **Historical analysis**: Use `get_sla_compliance_report` for trend analysis
-3. **Automated alerts**: Set up regular checks for at-risk tickets
-4. **Escalation workflows**: Use `escalate_ticket` for systematic escalation
+- **Caching:** Knowledge base articles are cached for improved performance
+- **Pagination:** Automatic handling of large result sets
+- **Rate Limiting:** Built-in Zendesk API rate limit compliance
+- **Error Handling:** Comprehensive error handling and retry logic
+- **Bulk Operations:** Efficient batch processing for large operations
 
-## 🔧 **Advanced Configuration**
+## 🛠️ Available Tools
 
-### **Custom SLA Targets**
-The server includes configurable SLA targets:
-- **Urgent**: 1h response, 4h resolution
-- **High**: 2h response, 8h resolution  
-- **Normal**: 8h response, 24h resolution
-- **Low**: 24h response, 48h resolution
+The server provides **55+ tools** organized by category:
 
-### **Performance Targets**
-Default performance targets for scorecards:
-- **Resolution Rate**: 85%
-- **Response Time**: 2h average
-- **Resolution Time**: 24h average
-- **Satisfaction Score**: 4.0/5.0
+### Core Operations (11 tools)
+- `get_ticket`, `get_ticket_comments`, `create_ticket_comment`
+- `search_tickets`, `get_ticket_counts`, `get_ticket_metrics`
+- `get_user_tickets`, `get_organization_tickets`
+- `get_satisfaction_ratings`, `get_agent_performance`, `get_user_by_id`
 
-## 🚀 **Next Steps**
+### Enterprise Analytics (3 tools)
+- `get_agent_performance_metrics`, `get_team_performance_dashboard`
+- `generate_agent_scorecard`
 
-1. **Restart Claude Desktop** to pick up the server changes
-2. **Test with comprehensive queries**:
-   - "Analyze our team's performance this month"
-   - "Show me tickets at risk of SLA breach"
-   - "What's the current workload distribution?"
-3. **Explore automation features**:
-   - "Categorize recent untagged tickets"
-   - "Suggest ticket reassignments for better balance"
-   - "Generate agent scorecards for the team"
+### Workload Management (2 tools)
+- `get_agent_workload_analysis`, `suggest_ticket_reassignment`
 
-## 📋 **License**
+### SLA Monitoring (2 tools)  
+- `get_sla_compliance_report`, `get_at_risk_tickets`
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Advanced Automation (3 tools)
+- `bulk_update_tickets`, `auto_categorize_tickets`, `escalate_ticket`
+
+### Macros & Templates (3 tools)
+- `get_macros`, `apply_macro_to_ticket`, `get_ticket_forms`
+
+### Advanced Ticket Operations (5 tools)
+- `merge_tickets`, `clone_ticket`, `add_ticket_tags`
+- `remove_ticket_tags`, `get_ticket_related_tickets`
+
+### Organization Management (4 tools)
+- `get_organizations`, `get_organization_details`
+- `update_organization`, `get_organization_users`
+
+### User Management (5 tools)
+- `create_user`, `update_user`, `suspend_user`
+- `search_users`, `get_user_identities`
+
+### Groups & Agents (4 tools)
+- `get_groups`, `get_group_memberships`
+- `assign_agent_to_group`, `remove_agent_from_group`
+
+### Custom Fields (3 tools)
+- `get_ticket_fields`, `get_user_fields`, `get_organization_fields`
+
+### Advanced Search (2 tools)
+- `advanced_search`, `export_search_results`
+
+### Automation (3 tools)
+- `get_automations`, `get_triggers`, `get_sla_policies`
+
+### Knowledge Base (2 tools)
+- `search_help_center`, `get_help_center_articles`
+
+### Audit & Events (2 tools)
+- `get_ticket_audits`, `get_ticket_events`
+
+### Collaboration (3 tools)
+- `add_ticket_collaborators`, `get_ticket_collaborators`
+- `remove_ticket_collaborators`
+
+### Advanced Reporting (3 tools)
+- `get_incremental_tickets`, `get_ticket_metrics_detailed`
+- `generate_agent_activity_report`
+
+## 📊 API Rate Limits
+
+Zendesk has API rate limits to ensure service stability:
+
+- **Standard plans:** 200 requests per minute
+- **Professional plans:** 400 requests per minute  
+- **Enterprise plans:** 700 requests per minute
+
+The server automatically handles rate limiting and implements exponential backoff for failed requests.
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **"Missing required Zendesk credentials"**
+   - Verify your `.env` file has all required variables
+   - Check that environment variables are properly set in Claude Desktop config
+
+2. **"SSL/Connection errors"**
+   - Verify your `ZENDESK_SUBDOMAIN` is correct (no `.zendesk.com` suffix)
+   - Check your internet connection
+   - Verify API credentials are valid
+
+3. **"Permission denied" errors**
+   - Ensure your API key has the necessary permissions
+   - Check that your Zendesk user account has access to the requested resources
+
+4. **"Rate limit exceeded"**
+   - The server automatically handles rate limits
+   - If persistent, reduce the frequency of requests
+
+5. **"Tool not found" errors**
+   - Restart Claude Desktop completely
+   - Clear Claude Desktop cache:
+     - **macOS:** `~/Library/Caches/Claude/`
+     - **Windows:** `%LOCALAPPDATA%\Claude\Cache\`
+
+### Debug Mode
+
+To enable debug logging, set the environment variable:
+```bash
+export MCP_LOG_LEVEL=debug
+```
+
+### Verification Commands
+
+Test your setup:
+```bash
+# Test server startup
+uv run zendesk --help
+
+# Test credentials  
+uv run python -c "
+from src.zendesk_mcp_server.zendesk_client import ZendeskClient
+client = ZendeskClient()
+print('✅ Zendesk connection successful')
+"
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔗 Related Resources
+
+- [Zendesk API Documentation](https://developer.zendesk.com/api-reference/)
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/)
+- [Claude Desktop Documentation](https://claude.ai/desktop)
+- [uv Package Manager](https://docs.astral.sh/uv/)
 
 ---
 
-**🎯 Ready to revolutionize your support team management with AI-powered insights and automation!**
+**🎯 Transform your Zendesk support operations with comprehensive AI-powered management tools!**

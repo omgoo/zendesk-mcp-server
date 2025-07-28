@@ -52,7 +52,7 @@ Arguments: {
   "period": "month"
 }
 ```
-**Use Case**: Monthly performance review - detailed scorecard with targets, strengths, and improvement recommendations.
+**Use Case**: Monthly 1:1 meetings - detailed scorecard showing performance vs targets and improvement areas.
 
 ### Generate Weekly Agent Scorecard
 ```
@@ -64,9 +64,9 @@ Arguments: {
 ```
 **Use Case**: Weekly check-in - quick performance assessment with actionable feedback.
 
-## ⚖️ **Workload Management & Distribution**
+## ⚖️ **Workload Management**
 
-### Analyze Current Team Workload
+### Analyze Current Agent Workload
 ```
 Request: get_agent_workload_analysis
 Arguments: {
@@ -74,9 +74,9 @@ Arguments: {
   "include_open": true
 }
 ```
-**Use Case**: Daily standup - get real-time view of team workload distribution and identify bottlenecks.
+**Use Case**: Daily team standup - check current workload distribution and identify overloaded agents.
 
-### Analyze Open Tickets Only
+### Get Workload Analysis (Active Tickets Only)
 ```
 Request: get_agent_workload_analysis
 Arguments: {
@@ -84,29 +84,29 @@ Arguments: {
   "include_open": true
 }
 ```
-**Use Case**: Focus on active work - exclude pending/hold tickets to see current active workload.
+**Use Case**: Focus on active work - exclude tickets on hold to see true active workload.
 
-### Get Workload Balance Suggestions
+### Suggest Ticket Reassignments for Balance
 ```
 Request: suggest_ticket_reassignment
 Arguments: {
   "criteria": "workload_balance"
 }
 ```
-**Use Case**: Load balancing - get AI suggestions to redistribute tickets from overloaded to underloaded agents.
+**Use Case**: End of day workload balancing - redistribute tickets to even out agent workloads.
 
-### Get Urgent Priority Redistribution Suggestions
+### Suggest Reassignments Based on Expertise
 ```
 Request: suggest_ticket_reassignment
 Arguments: {
-  "criteria": "urgent_priority"
+  "criteria": "expertise"
 }
 ```
-**Use Case**: Emergency response - redistribute urgent tickets to agents with capacity.
+**Use Case**: Complex ticket handling - reassign tickets to agents with relevant expertise.
 
-## 📊 **SLA Monitoring & Compliance**
+## 📊 **SLA Monitoring**
 
-### Generate Monthly SLA Compliance Report
+### Generate SLA Compliance Report (All Agents)
 ```
 Request: get_sla_compliance_report
 Arguments: {
@@ -114,7 +114,7 @@ Arguments: {
   "end_date": "2025-01-31"
 }
 ```
-**Use Case**: Monthly compliance review - comprehensive SLA performance analysis by priority level.
+**Use Case**: Monthly SLA review - comprehensive compliance report for all agents and priorities.
 
 ### Get Agent-Specific SLA Performance
 ```
@@ -134,14 +134,14 @@ Arguments: {}
 ```
 **Use Case**: Quick compliance check - default 30-day rolling SLA performance overview.
 
-### Identify Tickets at Risk (Next 24 Hours)
+### Identify At-Risk Tickets (Next 24 Hours)
 ```
 Request: get_at_risk_tickets
 Arguments: {
   "time_horizon": 24
 }
 ```
-**Use Case**: Daily SLA monitoring - identify tickets that might breach SLA in the next 24 hours.
+**Use Case**: Daily morning standup - identify tickets that need immediate attention to avoid SLA breach.
 
 ### Extended Risk Analysis (Next 48 Hours)
 ```
@@ -161,360 +161,633 @@ Arguments: {
 ```
 **Use Case**: Emergency response - immediate action needed for imminent SLA breaches.
 
-## 🤖 **Advanced Ticket Management & Automation**
+## 🤖 **Advanced Automation**
 
-### Bulk Status Update with Reason
-```
-Request: bulk_update_tickets
-Arguments: {
-  "ticket_ids": [12345, 12346, 12347],
-  "updates": {
-    "status": "pending",
-    "priority": "high"
-  },
-  "reason": "System maintenance - escalating priority for affected tickets"
-}
-```
-**Use Case**: System maintenance - bulk update affected tickets with proper documentation.
-
-### Bulk Assignment to Specific Agent
+### Bulk Update Multiple Tickets
 ```
 Request: bulk_update_tickets
 Arguments: {
   "ticket_ids": [12345, 12346, 12347, 12348],
   "updates": {
+    "status": "pending",
+    "priority": "high",
     "assignee_id": 386646129318,
-    "status": "open"
+    "tags": ["billing", "urgent"]
   },
-  "reason": "Specialized technical issue requiring expert attention"
+  "reason": "Escalating billing issues to senior agent"
 }
 ```
-**Use Case**: Expert assignment - bulk assign complex tickets to specialized agent.
+**Use Case**: Mass escalation - quickly update multiple related tickets with new status, priority, and assignment.
 
-### Bulk Tag Management (Add Tags)
+### Bulk Status Update
 ```
 Request: bulk_update_tickets
 Arguments: {
-  "ticket_ids": [12345, 12346, 12347],
+  "ticket_ids": [98765, 98766, 98767],
   "updates": {
-    "tags": {
-      "action": "add",
-      "values": ["urgent", "escalated", "system_outage"]
-    }
+    "status": "solved"
   },
-  "reason": "Critical system outage affecting multiple customers"
+  "reason": "Resolved by system maintenance"
 }
 ```
-**Use Case**: Emergency response - tag all related tickets for incident tracking.
+**Use Case**: System maintenance completion - mark multiple tickets as solved after infrastructure fix.
 
-### Bulk Tag Management (Remove Tags)
-```
-Request: bulk_update_tickets
-Arguments: {
-  "ticket_ids": [12345, 12346, 12347],
-  "updates": {
-    "tags": {
-      "action": "remove",
-      "values": ["pending_customer", "waiting"]
-    }
-  },
-  "reason": "Customer responses received - removing waiting tags"
-}
-```
-**Use Case**: Process update - clean up tags after customer responses.
-
-### Auto-Categorize Recent Untagged Tickets
+### Auto-Categorize Recent Tickets
 ```
 Request: auto_categorize_tickets
 Arguments: {
   "use_ml": true
 }
 ```
-**Use Case**: Daily maintenance - automatically categorize and tag recent tickets for better organization.
+**Use Case**: Daily ticket management - automatically categorize and tag new untagged tickets using ML.
 
 ### Auto-Categorize Specific Tickets
 ```
 Request: auto_categorize_tickets
 Arguments: {
-  "ticket_ids": [12345, 12346, 12347, 12348, 12349],
+  "ticket_ids": [11111, 22222, 33333],
   "use_ml": true
 }
 ```
-**Use Case**: Ticket triage - categorize specific tickets that need classification.
+**Use Case**: Manual categorization - categorize specific tickets that need proper classification.
 
-### Auto-Categorize Without ML (Rule-Based Only)
-```
-Request: auto_categorize_tickets
-Arguments: {
-  "ticket_ids": [12345, 12346, 12347],
-  "use_ml": false
-}
-```
-**Use Case**: Simple categorization - use only keyword-based rules for basic tagging.
-
-### Escalate to Manager
+### Escalate Ticket to Manager
 ```
 Request: escalate_ticket
 Arguments: {
   "ticket_id": 12345,
   "escalation_level": "manager",
-  "reason": "Customer complaint escalated to senior management level",
+  "reason": "Customer threatens to cancel contract, requires management attention",
   "notify_stakeholders": true
 }
 ```
-**Use Case**: Management escalation - serious issue requiring manager attention.
+**Use Case**: High-stakes escalation - escalate critical customer issue to management with notifications.
 
 ### Escalate to Senior Agent
 ```
 Request: escalate_ticket
 Arguments: {
-  "ticket_id": 12346,
+  "ticket_id": 67890,
   "escalation_level": "senior_agent",
-  "reason": "Complex technical issue requiring advanced expertise",
-  "notify_stakeholders": true
+  "reason": "Technical complexity beyond current agent expertise",
+  "notify_stakeholders": false
 }
 ```
-**Use Case**: Technical escalation - complex issue needing senior technical skills.
+**Use Case**: Technical escalation - move complex technical ticket to senior agent without external notifications.
 
-### External Escalation
-```
-Request: escalate_ticket
-Arguments: {
-  "ticket_id": 12347,
-  "escalation_level": "external",
-  "reason": "Issue requires third-party vendor involvement",
-  "notify_stakeholders": true
-}
-```
-**Use Case**: Vendor escalation - issue requiring external partner assistance.
+## 🎭 **Macros and Templates Management**
 
-## 🔍 **Enhanced Search & Analytics**
-
-### Performance-Optimized Search (Compact Mode)
+### View All Available Macros
 ```
-Request: search_tickets
-Arguments: {
-  "query": "status:open created>7days",
-  "sort_by": "created_at",
-  "sort_order": "desc",
-  "compact": true
-}
-```
-**Use Case**: Large dataset analysis - use compact mode to prevent overwhelming responses.
-
-### Detailed Search (Full Information)
-```
-Request: search_tickets
-Arguments: {
-  "query": "priority:urgent status:open",
-  "sort_by": "created_at",
-  "sort_order": "asc",
-  "compact": false
-}
-```
-**Use Case**: Detailed investigation - get full ticket information for thorough analysis.
-
-### Agent Performance Search
-```
-Request: search_tickets
-Arguments: {
-  "query": "assignee:386646129318 status:solved created>30days",
-  "compact": true
-}
-```
-**Use Case**: Agent productivity analysis - review solved tickets for specific agent.
-
-### SLA Risk Analysis Search
-```
-Request: search_tickets
-Arguments: {
-  "query": "status:new created>4hours priority:urgent",
-  "sort_by": "created_at",
-  "sort_order": "asc",
-  "compact": true
-}
-```
-**Use Case**: SLA breach prevention - find urgent tickets without first response.
-
-## 📊 **Core Analytics & Reporting**
-
-### Get Overall Ticket Statistics
-```
-Request: get_ticket_counts
+Request: get_macros
 Arguments: {}
 ```
-**Use Case**: Daily dashboard - quick overview of ticket volume and distribution.
+**Use Case**: Agent onboarding - show new agents all available macros sorted by usage frequency.
 
-### Get Agent Performance Overview (Legacy)
+### Apply Standard Response Macro
 ```
-Request: get_agent_performance
+Request: apply_macro_to_ticket
 Arguments: {
-  "days": 7
+  "ticket_id": 12345,
+  "macro_id": 98765
 }
 ```
-**Use Case**: Quick weekly check - simplified agent performance for the past week.
+**Use Case**: Standard response - quickly apply common resolution macro to ticket.
 
-### Get Monthly Agent Performance (Legacy)
+### Get Ticket Forms Configuration
 ```
-Request: get_agent_performance
+Request: get_ticket_forms
+Arguments: {}
+```
+**Use Case**: Form management - review all ticket forms and their field configurations for optimization.
+
+## 🎫 **Advanced Ticket Operations**
+
+### Merge Multiple Tickets into One
+```
+Request: merge_tickets
 Arguments: {
-  "days": 30
+  "source_ticket_ids": [12345, 12346, 12347],
+  "target_ticket_id": 12344
 }
 ```
-**Use Case**: Monthly review - 30-day agent performance summary.
+**Use Case**: Duplicate resolution - merge multiple tickets about the same issue into one master ticket.
 
-### Get Customer Satisfaction Overview
+### Clone Important Ticket
 ```
-Request: get_satisfaction_ratings
+Request: clone_ticket
 Arguments: {
-  "limit": 50
+  "ticket_id": 12345,
+  "include_comments": true
 }
 ```
-**Use Case**: Customer satisfaction review - recent satisfaction ratings and trends.
+**Use Case**: Template creation - clone a well-handled ticket to create template for similar issues.
 
-### Get Extended Satisfaction Analysis
+### Clone Ticket Without Comments
 ```
-Request: get_satisfaction_ratings
+Request: clone_ticket
 Arguments: {
-  "limit": 200
+  "ticket_id": 67890,
+  "include_comments": false
 }
 ```
-**Use Case**: Comprehensive satisfaction analysis - larger dataset for trend analysis.
+**Use Case**: New issue tracking - clone ticket structure for new related issue without conversation history.
 
-## 👤 **User & Organization Management**
-
-### Get Detailed User Information
+### Add Tags to Ticket
 ```
-Request: get_user_by_id
+Request: add_ticket_tags
 Arguments: {
-  "user_id": 386646129318
+  "ticket_id": 12345,
+  "tags": ["billing", "urgent", "enterprise-customer"]
 }
 ```
-**Use Case**: Agent profile lookup - get complete agent information for performance analysis.
+**Use Case**: Ticket classification - add relevant tags for better organization and routing.
 
-### Get User Tickets (Requested)
+### Remove Specific Tags
 ```
-Request: get_user_tickets
+Request: remove_ticket_tags
 Arguments: {
-  "user_id": 123456789,
-  "ticket_type": "requested"
+  "ticket_id": 12345,
+  "tags": ["pending-customer", "waiting"]
 }
 ```
-**Use Case**: Customer history - see all tickets submitted by a specific customer.
+**Use Case**: Status cleanup - remove outdated tags when ticket status changes.
 
-### Get User Tickets (Assigned)
+### Find Related Tickets
 ```
-Request: get_user_tickets
+Request: get_ticket_related_tickets
 Arguments: {
-  "user_id": 386646129318,
-  "ticket_type": "assigned"
+  "ticket_id": 12345
 }
 ```
-**Use Case**: Agent workload - see all tickets currently assigned to an agent.
+**Use Case**: Context gathering - find other tickets from same customer or with similar issues for context.
 
-### Get Organization Tickets
+## 🏢 **Organization Management**
+
+### Get All Organizations
 ```
-Request: get_organization_tickets
+Request: get_organizations
+Arguments: {}
+```
+**Use Case**: Organization overview - list all organizations for account management review.
+
+### Search Organizations by Name
+```
+Request: get_organizations
 Arguments: {
-  "organization_id": 987654321
+  "name": "Acme Corporation"
 }
 ```
-**Use Case**: Account management - review all tickets for a specific organization.
+**Use Case**: Account lookup - find specific organization by name for account management.
 
-## 🎭 **Common Workflow Examples**
+### Search by External ID
+```
+Request: get_organizations
+Arguments: {
+  "external_id": "ORG-12345"
+}
+```
+**Use Case**: System integration - lookup organization using external system identifier.
+
+### Get Detailed Organization Information
+```
+Request: get_organization_details
+Arguments: {
+  "org_id": 12345678
+}
+```
+**Use Case**: Account review - get comprehensive organization details including custom fields and metrics.
+
+### Update Organization Information
+```
+Request: update_organization
+Arguments: {
+  "org_id": 12345678,
+  "name": "Acme Corporation (Acquired)",
+  "details": "Recently acquired by BigCorp Inc.",
+  "notes": "Update billing contact after acquisition"
+}
+```
+**Use Case**: Account maintenance - update organization information after corporate changes.
+
+### Get All Users in Organization
+```
+Request: get_organization_users
+Arguments: {
+  "org_id": 12345678
+}
+```
+**Use Case**: Account management - list all users for organization-wide communication or support planning.
+
+## 👤 **Advanced User Management**
+
+### Create New End User
+```
+Request: create_user
+Arguments: {
+  "name": "John Smith",
+  "email": "john.smith@company.com",
+  "role": "end-user",
+  "organization_id": 12345678
+}
+```
+**Use Case**: New customer onboarding - create user account for new customer contact.
+
+### Create New Agent
+```
+Request: create_user
+Arguments: {
+  "name": "Sarah Johnson",
+  "email": "sarah.johnson@ourcompany.com",
+  "role": "agent"
+}
+```
+**Use Case**: Team expansion - create new agent account for new hire.
+
+### Update User Information
+```
+Request: update_user
+Arguments: {
+  "user_id": 98765432,
+  "name": "John Smith-Wilson",
+  "email": "j.smithwilson@company.com",
+  "role": "agent"
+}
+```
+**Use Case**: User maintenance - update user details after name change or role promotion.
+
+### Suspend User Account
+```
+Request: suspend_user
+Arguments: {
+  "user_id": 98765432,
+  "reason": "Employment terminated - security compliance"
+}
+```
+**Use Case**: Security compliance - suspend user account when employee leaves company.
+
+### Search Users by Role
+```
+Request: search_users
+Arguments: {
+  "query": "active:true",
+  "role": "agent"
+}
+```
+**Use Case**: Team management - find all active agents for scheduling or assignment purposes.
+
+### Search Users in Organization
+```
+Request: search_users
+Arguments: {
+  "query": "verified:true",
+  "organization_id": 12345678
+}
+```
+**Use Case**: Account management - find verified users in specific organization for communication.
+
+### Get User Contact Information
+```
+Request: get_user_identities
+Arguments: {
+  "user_id": 98765432
+}
+```
+**Use Case**: Contact management - get all contact methods (email, phone) for important customer.
+
+## 👥 **Groups and Agent Management**
+
+### Get All Support Groups
+```
+Request: get_groups
+Arguments: {}
+```
+**Use Case**: Team organization - review all support groups and their member counts.
+
+### Get Group Memberships for Specific Group
+```
+Request: get_group_memberships
+Arguments: {
+  "group_id": 87654321
+}
+```
+**Use Case**: Team management - see all agents assigned to specific support group.
+
+### Get User's Group Memberships
+```
+Request: get_group_memberships
+Arguments: {
+  "user_id": 98765432
+}
+```
+**Use Case**: Agent management - see which groups an agent belongs to for assignment planning.
+
+### Assign Agent to Group
+```
+Request: assign_agent_to_group
+Arguments: {
+  "user_id": 98765432,
+  "group_id": 87654321,
+  "is_default": true
+}
+```
+**Use Case**: Team onboarding - assign new agent to support group as their primary assignment.
+
+### Assign Agent to Additional Group
+```
+Request: assign_agent_to_group
+Arguments: {
+  "user_id": 98765432,
+  "group_id": 11111111,
+  "is_default": false
+}
+```
+**Use Case**: Cross-training - assign agent to additional group for backup support coverage.
+
+### Remove Agent from Group
+```
+Request: remove_agent_from_group
+Arguments: {
+  "user_id": 98765432,
+  "group_id": 87654321
+}
+```
+**Use Case**: Team restructuring - remove agent from group during organizational changes.
+
+## 📋 **Custom Fields and Configuration**
+
+### Get All Ticket Fields
+```
+Request: get_ticket_fields
+Arguments: {}
+```
+**Use Case**: Form configuration - review all available ticket fields for form customization.
+
+### Get User Custom Fields
+```
+Request: get_user_fields
+Arguments: {}
+```
+**Use Case**: User data management - see custom fields available for user profiles.
+
+### Get Organization Custom Fields
+```
+Request: get_organization_fields
+Arguments: {}
+```
+**Use Case**: Account management - review custom fields for organization data tracking.
+
+## 🔍 **Advanced Search and Export**
+
+### Advanced Ticket Search
+```
+Request: advanced_search
+Arguments: {
+  "search_type": "tickets",
+  "query": "priority:high created>=2025-01-01",
+  "sort_by": "created_at",
+  "sort_order": "desc"
+}
+```
+**Use Case**: Priority management - find all high priority tickets created this year, newest first.
+
+### Search Users by Role
+```
+Request: advanced_search
+Arguments: {
+  "search_type": "users",
+  "query": "role:agent active:true",
+  "sort_by": "last_login_at",
+  "sort_order": "desc"
+}
+```
+**Use Case**: Team activity - find active agents sorted by most recent login.
+
+### Search Organizations
+```
+Request: advanced_search
+Arguments: {
+  "search_type": "organizations",
+  "query": "created>=2024-01-01",
+  "sort_by": "created_at"
+}
+```
+**Use Case**: Account growth - find organizations created this year for business analysis.
+
+### Export Ticket Data for Reporting
+```
+Request: export_search_results
+Arguments: {
+  "query": "status:solved created>=2025-01-01 created<=2025-01-31",
+  "object_type": "ticket"
+}
+```
+**Use Case**: Monthly reporting - export all solved tickets from January for performance analysis.
+
+### Export User Data
+```
+Request: export_search_results
+Arguments: {
+  "query": "role:end-user created>=2025-01-01",
+  "object_type": "user"
+}
+```
+**Use Case**: Customer growth analysis - export new customers from this year for business metrics.
+
+## ⚙️ **Automation and Business Rules**
+
+### View All Automations
+```
+Request: get_automations
+Arguments: {}
+```
+**Use Case**: Automation audit - review all active automations and their conditions.
+
+### View All Triggers
+```
+Request: get_triggers
+Arguments: {}
+```
+**Use Case**: Workflow optimization - analyze triggers for performance and efficiency improvements.
+
+### View SLA Policies
+```
+Request: get_sla_policies
+Arguments: {}
+```
+**Use Case**: SLA management - review all SLA policies and their metrics for compliance planning.
+
+## 📚 **Knowledge Base Integration**
+
+### Search Help Center Articles
+```
+Request: search_help_center
+Arguments: {
+  "query": "password reset",
+  "locale": "en-us"
+}
+```
+**Use Case**: Agent assistance - find relevant help articles to share with customers.
+
+### Search Articles in Specific Category
+```
+Request: search_help_center
+Arguments: {
+  "query": "billing",
+  "locale": "en-us",
+  "category_id": 12345
+}
+```
+**Use Case**: Focused search - find billing-related articles within specific category.
+
+### Get Articles by Section
+```
+Request: get_help_center_articles
+Arguments: {
+  "section_id": 67890
+}
+```
+**Use Case**: Content management - review all articles in specific help section.
+
+### Get Articles by Category
+```
+Request: get_help_center_articles
+Arguments: {
+  "category_id": 12345
+}
+```
+**Use Case**: Content audit - get all articles in category for content review and updates.
+
+## 🔍 **Audit and Compliance**
+
+### Get Complete Ticket Audit History
+```
+Request: get_ticket_audits
+Arguments: {
+  "ticket_id": 12345
+}
+```
+**Use Case**: Compliance review - detailed audit trail for important ticket investigation.
+
+### Get Ticket Events Timeline
+```
+Request: get_ticket_events
+Arguments: {
+  "ticket_id": 12345
+}
+```
+**Use Case**: Timeline analysis - chronological view of all changes and activities on ticket.
+
+## 👥 **Collaboration Features**
+
+### Add Collaborators to Ticket
+```
+Request: add_ticket_collaborators
+Arguments: {
+  "ticket_id": 12345,
+  "email_addresses": ["manager@company.com", "specialist@company.com"]
+}
+```
+**Use Case**: Stakeholder involvement - add relevant team members to important ticket discussions.
+
+### Get Current Collaborators
+```
+Request: get_ticket_collaborators
+Arguments: {
+  "ticket_id": 12345
+}
+```
+**Use Case**: Communication management - see who is currently included in ticket communications.
+
+### Remove Collaborators
+```
+Request: remove_ticket_collaborators
+Arguments: {
+  "ticket_id": 12345,
+  "user_ids": [98765, 87654]
+}
+```
+**Use Case**: Access control - remove users who no longer need access to ticket updates.
+
+## 📊 **Advanced Reporting**
+
+### Get Incremental Ticket Updates
+```
+Request: get_incremental_tickets
+Arguments: {
+  "start_time": 1704067200
+}
+```
+**Use Case**: Data synchronization - efficiently sync ticket data with external systems.
+
+### Get Detailed Ticket Metrics
+```
+Request: get_ticket_metrics_detailed
+Arguments: {
+  "ticket_id": 12345
+}
+```
+**Use Case**: Performance analysis - deep dive into specific ticket's SLA and timing metrics.
+
+### Generate Agent Activity Report
+```
+Request: generate_agent_activity_report
+Arguments: {
+  "agent_id": 98765432,
+  "start_date": "2025-01-01",
+  "end_date": "2025-01-31"
+}
+```
+**Use Case**: Performance review - comprehensive monthly activity report for agent evaluation.
+
+## 🔄 **Common Workflow Examples**
 
 ### Daily Team Standup Workflow
-1. **Check current workload**: `get_agent_workload_analysis`
-2. **Identify at-risk tickets**: `get_at_risk_tickets` (24 hours)
-3. **Review urgent tickets**: `search_tickets` with "priority:urgent status:open"
-4. **Balance workload if needed**: `suggest_ticket_reassignment`
-
-### Weekly Performance Review
-1. **Generate team dashboard**: `get_team_performance_dashboard` (week)
-2. **Individual scorecards**: `generate_agent_scorecard` for each agent
-3. **SLA compliance check**: `get_sla_compliance_report` (7 days)
-4. **Satisfaction review**: `get_satisfaction_ratings`
-
-### Monthly Management Review
-1. **Team performance**: `get_team_performance_dashboard` (month)
-2. **SLA compliance**: `get_sla_compliance_report` (30 days)
-3. **Individual performance**: `get_agent_performance_metrics` per agent
-4. **Workload trends**: `get_agent_workload_analysis`
-
-### Emergency Response Workflow
-1. **Identify critical tickets**: `get_at_risk_tickets` (4 hours)
-2. **Bulk escalate if needed**: `bulk_update_tickets` with priority increase
-3. **Escalate specific tickets**: `escalate_ticket` to appropriate level
-4. **Redistribute workload**: `suggest_ticket_reassignment` (urgent_priority)
-
-### System Maintenance Workflow
-1. **Identify affected tickets**: `search_tickets` with relevant criteria
-2. **Bulk update status**: `bulk_update_tickets` with maintenance reason
-3. **Add tracking tags**: `bulk_update_tickets` with tag additions
-4. **Monitor during maintenance**: `get_at_risk_tickets` for new issues
-
-## 🔧 **Troubleshooting Examples**
-
-### Handle "Maximum Length" Errors
 ```
-# Instead of this (might be too large):
-Request: search_tickets
-Arguments: {"query": "created>30days"}
-
-# Use this (compact mode):
-Request: search_tickets
-Arguments: {
-  "query": "created>30days",
-  "compact": true
-}
+1. Check at-risk tickets: get_at_risk_tickets (time_horizon: 4)
+2. Review workload: get_agent_workload_analysis
+3. Suggest reassignments: suggest_ticket_reassignment (criteria: "workload_balance")
+4. Check team performance: get_team_performance_dashboard (period: "week")
 ```
 
-### Performance Optimization
+### Monthly Performance Review
 ```
-# For large datasets, use specific filters:
-Request: get_agent_performance_metrics
-Arguments: {
-  "agent_id": 386646129318,  # Specific agent only
-  "start_date": "2025-01-15", # Limited date range
-  "end_date": "2025-01-22"
-}
+1. Generate agent scorecards: generate_agent_scorecard (each agent, period: "month")
+2. SLA compliance: get_sla_compliance_report (monthly range)
+3. Team dashboard: get_team_performance_dashboard (period: "month")
+4. Export data: export_search_results (solved tickets for reporting)
 ```
 
-### Gradual Data Analysis
+### Customer Escalation Workflow
 ```
-# Step 1: Get overview
-Request: get_team_performance_dashboard
-Arguments: {"period": "week"}
-
-# Step 2: Drill down on specific agents
-Request: generate_agent_scorecard
-Arguments: {"agent_id": [top_performer_id], "period": "week"}
-
-# Step 3: Detailed analysis
-Request: get_agent_performance_metrics
-Arguments: {"agent_id": [specific_agent], "start_date": "2025-01-15"}
+1. Find related tickets: get_ticket_related_tickets
+2. Get organization details: get_organization_details
+3. Add stakeholders: add_ticket_collaborators
+4. Escalate ticket: escalate_ticket (level: "manager")
+5. Apply urgency macro: apply_macro_to_ticket
 ```
 
-## 🚀 **Advanced Use Cases**
+### New Customer Onboarding
+```
+1. Create organization: update_organization (if needed)
+2. Create user: create_user
+3. Get user identities: get_user_identities
+4. Search help articles: search_help_center (for onboarding materials)
+```
 
-### AI-Powered Support Optimization
-1. **Auto-categorize**: `auto_categorize_tickets` for better organization
-2. **Balance workloads**: `suggest_ticket_reassignment` for optimal distribution
-3. **Monitor SLA**: `get_at_risk_tickets` for proactive management
-4. **Performance coaching**: `generate_agent_scorecard` for targeted improvements
-
-### Data-Driven Decision Making
-1. **Trend analysis**: `get_team_performance_dashboard` across different periods
-2. **Capacity planning**: `get_agent_workload_analysis` for resource allocation
-3. **Quality assurance**: `get_sla_compliance_report` for process improvement
-4. **Customer satisfaction**: `get_satisfaction_ratings` for service quality
-
-### Automated Workflows
-1. **Bulk operations**: `bulk_update_tickets` for mass changes
-2. **Smart escalation**: `escalate_ticket` with proper notifications
-3. **Intelligent categorization**: `auto_categorize_tickets` with ML
-4. **Proactive monitoring**: `get_at_risk_tickets` for prevention
+### Bulk Ticket Management
+```
+1. Search tickets: advanced_search (specific criteria)
+2. Auto-categorize: auto_categorize_tickets
+3. Bulk update: bulk_update_tickets (status, assignments, etc.)
+4. Add tags: add_ticket_tags (for tracking)
+```
 
 ---
 
-**🎯 These examples cover all enterprise features and provide practical guidance for every tool in your comprehensive Zendesk MCP server!** 
+**💡 Pro Tips:**
+- Combine multiple tools for complex workflows
+- Use export functions for external reporting
+- Leverage automation tools for efficiency
+- Monitor SLA compliance proactively
+- Use audit trails for compliance and learning 

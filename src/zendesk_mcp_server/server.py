@@ -453,7 +453,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["user_id"]
             }
         ),
-        # ENTERPRISE PERFORMANCE ANALYTICS TOOLS
+        # Enterprise Performance Analytics
         types.Tool(
             name="get_agent_performance_metrics",
             description="Get comprehensive agent performance metrics including response times, resolution rates, and satisfaction scores.",
@@ -481,28 +481,26 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_team_performance_dashboard",
-            description="Generate comprehensive team performance dashboard with rankings, workload distribution, and bottleneck identification.",
+            description="Generate team-wide performance dashboard with agent rankings and workload distribution.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "team_id": {
                         "type": "integer",
-                        "description": "Team ID to analyze (optional)"
+                        "description": "Team/group ID to analyze (optional)"
                     },
                     "period": {
                         "type": "string",
-                        "description": "Analysis period",
-                        "enum": ["week", "month", "quarter"],
-                        "default": "week"
+                        "description": "Time period for analysis (week, month, quarter, default: week)"
                     }
                 }
             }
         ),
         types.Tool(
             name="generate_agent_scorecard",
-            description="Create detailed agent scorecard with performance vs targets, strengths, improvement areas, and recommendations.",
+            description="Create detailed agent scorecard with performance vs targets and improvement areas.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "agent_id": {
                         "type": "integer",
@@ -510,24 +508,23 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "period": {
                         "type": "string",
-                        "description": "Scorecard period",
-                        "enum": ["week", "month", "quarter"],
-                        "default": "month"
+                        "description": "Time period for scorecard (week, month, quarter, default: month)"
                     }
                 },
                 "required": ["agent_id"]
             }
         ),
-        # WORKLOAD MANAGEMENT TOOLS
+
+        # Workload Management
         types.Tool(
             name="get_agent_workload_analysis",
             description="Analyze current workload distribution across agents with capacity utilization and imbalance alerts.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "include_pending": {
                         "type": "boolean",
-                        "description": "Include pending/hold tickets in analysis (default: true)"
+                        "description": "Include pending tickets in analysis (default: true)"
                     },
                     "include_open": {
                         "type": "boolean",
@@ -538,37 +535,36 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="suggest_ticket_reassignment",
-            description="Suggest ticket reassignments to balance workload or prioritize urgent tickets.",
+            description="Suggest ticket reassignments to balance workload or match agent expertise.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "criteria": {
                         "type": "string",
-                        "description": "Reassignment criteria",
-                        "enum": ["workload_balance", "urgent_priority"],
-                        "default": "workload_balance"
+                        "description": "Reassignment criteria (workload_balance, expertise, availability, default: workload_balance)"
                     }
                 }
             }
         ),
-        # SLA MONITORING TOOLS
+
+        # SLA Monitoring
         types.Tool(
             name="get_sla_compliance_report",
-            description="Generate comprehensive SLA compliance report with first response and resolution time analysis by priority.",
+            description="Generate SLA compliance report with first response and resolution time compliance.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "start_date": {
                         "type": "string",
-                        "description": "Start date for analysis (YYYY-MM-DD format, default: 30 days ago)"
+                        "description": "Start date for report (YYYY-MM-DD format)"
                     },
                     "end_date": {
-                        "type": "string", 
-                        "description": "End date for analysis (YYYY-MM-DD format, default: today)"
+                        "type": "string",
+                        "description": "End date for report (YYYY-MM-DD format)"
                     },
                     "agent_id": {
                         "type": "integer",
-                        "description": "Agent ID to analyze (optional - if not provided, analyzes all agents)"
+                        "description": "Filter by specific agent ID (optional)"
                     }
                 }
             }
@@ -577,51 +573,35 @@ async def handle_list_tools() -> list[types.Tool]:
             name="get_at_risk_tickets",
             description="Identify tickets at risk of SLA breach with time remaining and escalation recommendations.",
             inputSchema={
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "time_horizon": {
                         "type": "integer",
-                        "description": "Time horizon in hours to identify at-risk tickets (default: 24)",
-                        "default": 24,
-                        "minimum": 1,
-                        "maximum": 168
+                        "description": "Time horizon in hours to check for SLA breach risk (default: 24)"
                     }
                 }
             }
         ),
-        # ADVANCED AUTOMATION TOOLS
+
+        # Advanced Automation
         types.Tool(
             name="bulk_update_tickets",
-            description="Perform bulk updates on multiple tickets including status, priority, tags, and assignment changes.",
+            description="Perform bulk updates on multiple tickets (status, priority, tags, assignments).",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticket_ids": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "List of ticket IDs to update (max 100)",
-                        "maxItems": 100
+                        "description": "List of ticket IDs to update"
                     },
                     "updates": {
                         "type": "object",
-                        "description": "Updates to apply to all tickets",
-                        "properties": {
-                            "status": {"type": "string"},
-                            "priority": {"type": "string"},
-                            "assignee_id": {"type": "integer"},
-                            "group_id": {"type": "integer"},
-                            "tags": {
-                                "type": "object",
-                                "properties": {
-                                    "action": {"enum": ["add", "remove", "set"]},
-                                    "values": {"type": "array", "items": {"type": "string"}}
-                                }
-                            }
-                        }
+                        "description": "Object containing updates to apply (status, priority, tags, assignee_id, etc.)"
                     },
                     "reason": {
                         "type": "string",
-                        "description": "Reason for the bulk update (optional but recommended)"
+                        "description": "Optional reason for bulk update"
                     }
                 },
                 "required": ["ticket_ids", "updates"]
@@ -629,25 +609,25 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="auto_categorize_tickets",
-            description="Automatically categorize and tag tickets based on content analysis and machine learning.",
+            description="Automatically categorize tickets based on content analysis and historical patterns.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticket_ids": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "Specific ticket IDs to categorize (optional - if not provided, uses recent untagged tickets)"
+                        "description": "List of ticket IDs to categorize (optional - if not provided, categorizes recent untagged tickets)"
                     },
                     "use_ml": {
                         "type": "boolean",
-                        "description": "Enable machine learning-based categorization (default: true)"
+                        "description": "Use machine learning models for categorization (default: true)"
                     }
                 }
             }
         ),
         types.Tool(
             name="escalate_ticket",
-            description="Escalate ticket to appropriate level with automatic notifications and tracking.",
+            description="Escalate tickets with proper notifications and tracking.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -657,8 +637,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "escalation_level": {
                         "type": "string",
-                        "description": "Level of escalation",
-                        "enum": ["manager", "senior_agent", "external"]
+                        "description": "Escalation level (manager, senior_agent, external)"
                     },
                     "reason": {
                         "type": "string",
@@ -666,10 +645,637 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "notify_stakeholders": {
                         "type": "boolean",
-                        "description": "Send notifications to relevant stakeholders (default: true)"
+                        "description": "Send notifications to stakeholders (default: true)"
                     }
                 },
                 "required": ["ticket_id", "escalation_level", "reason"]
+            }
+        ),
+
+        # MACROS AND TEMPLATES MANAGEMENT
+        types.Tool(
+            name="get_macros",
+            description="Get all available macros for agents with usage statistics.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="apply_macro_to_ticket",
+            description="Apply a macro to a specific ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ID of the ticket to apply macro to"
+                    },
+                    "macro_id": {
+                        "type": "integer", 
+                        "description": "The ID of the macro to apply"
+                    }
+                },
+                "required": ["ticket_id", "macro_id"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_forms",
+            description="Get all ticket forms and their field configurations.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+
+        # ADVANCED TICKET OPERATIONS
+        types.Tool(
+            name="merge_tickets",
+            description="Merge multiple source tickets into one target ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_ticket_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of ticket IDs to merge from"
+                    },
+                    "target_ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID to merge into"
+                    }
+                },
+                "required": ["source_ticket_ids", "target_ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="clone_ticket",
+            description="Clone a ticket with optional comments.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID to clone"
+                    },
+                    "include_comments": {
+                        "type": "boolean",
+                        "description": "Whether to include comments in the clone (default: false)"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="add_ticket_tags",
+            description="Add tags to a ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of tags to add"
+                    }
+                },
+                "required": ["ticket_id", "tags"]
+            }
+        ),
+        types.Tool(
+            name="remove_ticket_tags",
+            description="Remove specific tags from a ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of tags to remove"
+                    }
+                },
+                "required": ["ticket_id", "tags"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_related_tickets",
+            description="Get tickets related to the current ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID to find related tickets for"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+
+        # ORGANIZATION MANAGEMENT
+        types.Tool(
+            name="get_organizations",
+            description="Get organizations with optional filtering.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "external_id": {
+                        "type": "string",
+                        "description": "Filter by external ID"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Filter by organization name"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_organization_details",
+            description="Get detailed organization information including custom fields.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "org_id": {
+                        "type": "integer",
+                        "description": "Organization ID to get details for"
+                    }
+                },
+                "required": ["org_id"]
+            }
+        ),
+        types.Tool(
+            name="update_organization",
+            description="Update organization details.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "org_id": {
+                        "type": "integer",
+                        "description": "Organization ID to update"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New organization name"
+                    },
+                    "details": {
+                        "type": "string",
+                        "description": "Organization details"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Organization notes"
+                    }
+                },
+                "required": ["org_id"]
+            }
+        ),
+        types.Tool(
+            name="get_organization_users",
+            description="Get all users in an organization.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "org_id": {
+                        "type": "integer",
+                        "description": "Organization ID to get users for"
+                    }
+                },
+                "required": ["org_id"]
+            }
+        ),
+
+        # ADVANCED USER MANAGEMENT
+        types.Tool(
+            name="create_user",
+            description="Create a new user.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "User's full name"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "User's email address"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "User role (end-user, agent, admin, default: end-user)"
+                    },
+                    "organization_id": {
+                        "type": "integer",
+                        "description": "Optional organization ID"
+                    }
+                },
+                "required": ["name", "email"]
+            }
+        ),
+        types.Tool(
+            name="update_user",
+            description="Update user information.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "User ID to update"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New name"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "New email"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "New role"
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+        types.Tool(
+            name="suspend_user",
+            description="Suspend a user account.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "User ID to suspend"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Optional reason for suspension"
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+        types.Tool(
+            name="search_users",
+            description="Search for users with advanced filters.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Filter by role"
+                    },
+                    "organization_id": {
+                        "type": "integer",
+                        "description": "Filter by organization"
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_user_identities",
+            description="Get user identity information (email addresses, phone numbers, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "User ID to get identities for"
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+
+        # GROUPS AND AGENT MANAGEMENT
+        types.Tool(
+            name="get_groups",
+            description="Get all support groups.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="get_group_memberships",
+            description="Get group memberships.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "group_id": {
+                        "type": "integer",
+                        "description": "Filter by specific group"
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Filter by specific user"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="assign_agent_to_group",
+            description="Assign an agent to a group.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Agent user ID"
+                    },
+                    "group_id": {
+                        "type": "integer",
+                        "description": "Group ID"
+                    },
+                    "is_default": {
+                        "type": "boolean",
+                        "description": "Whether this is the agent's default group (default: false)"
+                    }
+                },
+                "required": ["user_id", "group_id"]
+            }
+        ),
+        types.Tool(
+            name="remove_agent_from_group",
+            description="Remove an agent from a group.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "Agent user ID"
+                    },
+                    "group_id": {
+                        "type": "integer",
+                        "description": "Group ID"
+                    }
+                },
+                "required": ["user_id", "group_id"]
+            }
+        ),
+
+        # CUSTOM FIELDS AND TICKET FIELDS
+        types.Tool(
+            name="get_ticket_fields",
+            description="Get all ticket fields including custom fields with their configurations.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="get_user_fields",
+            description="Get all user fields including custom fields.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="get_organization_fields",
+            description="Get all organization fields including custom fields.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+
+        # ADVANCED SEARCH AND FILTERING
+        types.Tool(
+            name="advanced_search",
+            description="Advanced search across different object types.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "search_type": {
+                        "type": "string",
+                        "description": "Type to search (tickets, users, organizations)"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "description": "Field to sort by"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "description": "Sort order (asc, desc, default: desc)"
+                    }
+                },
+                "required": ["search_type", "query"]
+            }
+        ),
+        types.Tool(
+            name="export_search_results",
+            description="Export search results for bulk processing.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "object_type": {
+                        "type": "string",
+                        "description": "Type of objects to export (default: ticket)"
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+
+        # AUTOMATION AND BUSINESS RULES
+        types.Tool(
+            name="get_automations",
+            description="Get all automations with their conditions and actions.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="get_triggers",
+            description="Get all triggers with their conditions and actions.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
+            name="get_sla_policies",
+            description="Get all SLA policies and their configurations.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+
+        # KNOWLEDGE BASE INTEGRATION
+        types.Tool(
+            name="search_help_center",
+            description="Search help center articles.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "locale": {
+                        "type": "string",
+                        "description": "Language locale (default: en-us)"
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "description": "Optional category filter"
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="get_help_center_articles",
+            description="Get help center articles.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "section_id": {
+                        "type": "integer",
+                        "description": "Filter by section"
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "description": "Filter by category"
+                    }
+                }
+            }
+        ),
+
+        # TICKET EVENTS AND AUDIT LOG
+        types.Tool(
+            name="get_ticket_audits",
+            description="Get all audit events for a ticket (complete change history).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to get audits for"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_events",
+            description="Get all events for a ticket including system events.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to get events for"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+
+        # COLLABORATION FEATURES
+        types.Tool(
+            name="add_ticket_collaborators",
+            description="Add collaborators (CC) to a ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID"
+                    },
+                    "email_addresses": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of email addresses to add as collaborators"
+                    }
+                },
+                "required": ["ticket_id", "email_addresses"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_collaborators",
+            description="Get all collaborators on a ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to get collaborators for"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="remove_ticket_collaborators",
+            description="Remove collaborators from a ticket.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID"
+                    },
+                    "user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of user IDs to remove as collaborators"
+                    }
+                },
+                "required": ["ticket_id", "user_ids"]
+            }
+        ),
+
+        # ADVANCED REPORTING
+        types.Tool(
+            name="get_incremental_tickets",
+            description="Get tickets incrementally for data synchronization.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "start_time": {
+                        "type": "integer",
+                        "description": "Unix timestamp to start from"
+                    },
+                    "cursor": {
+                        "type": "string",
+                        "description": "Pagination cursor for next page"
+                    }
+                },
+                "required": ["start_time"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_metrics_detailed",
+            description="Get detailed metrics for a specific ticket including SLA data.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to get detailed metrics for"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="generate_agent_activity_report",
+            description="Generate detailed activity report for an agent.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "agent_id": {
+                        "type": "integer",
+                        "description": "Agent user ID"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)"
+                    }
+                },
+                "required": ["agent_id", "start_date", "end_date"]
             }
         )
     ]
@@ -992,6 +1598,387 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(escalated_ticket, indent=2)
+            )]
+
+        elif name == "get_macros":
+            macros = zendesk_client.get_macros()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(macros, indent=2)
+            )]
+
+        elif name == "apply_macro_to_ticket":
+            if not arguments or "ticket_id" not in arguments or "macro_id" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id and macro_id")
+            ticket_id = arguments["ticket_id"]
+            macro_id = arguments["macro_id"]
+            result = zendesk_client.apply_macro_to_ticket(ticket_id=ticket_id, macro_id=macro_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_ticket_forms":
+            forms = zendesk_client.get_ticket_forms()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(forms, indent=2)
+            )]
+
+        elif name == "merge_tickets":
+            if not arguments or "source_ticket_ids" not in arguments or "target_ticket_id" not in arguments:
+                raise ValueError("Missing required arguments: source_ticket_ids and target_ticket_id")
+            source_ticket_ids = arguments["source_ticket_ids"]
+            target_ticket_id = arguments["target_ticket_id"]
+            result = zendesk_client.merge_tickets(source_ticket_ids=source_ticket_ids, target_ticket_id=target_ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "clone_ticket":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            include_comments = arguments.get("include_comments", False) if arguments else False
+            result = zendesk_client.clone_ticket(ticket_id=ticket_id, include_comments=include_comments)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "add_ticket_tags":
+            if not arguments or "ticket_id" not in arguments or "tags" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id and tags")
+            ticket_id = arguments["ticket_id"]
+            tags = arguments["tags"]
+            result = zendesk_client.add_ticket_tags(ticket_id=ticket_id, tags=tags)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "remove_ticket_tags":
+            if not arguments or "ticket_id" not in arguments or "tags" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id and tags")
+            ticket_id = arguments["ticket_id"]
+            tags = arguments["tags"]
+            result = zendesk_client.remove_ticket_tags(ticket_id=ticket_id, tags=tags)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_ticket_related_tickets":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            related_tickets = zendesk_client.get_ticket_related_tickets(ticket_id=ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(related_tickets, indent=2)
+            )]
+
+        elif name == "get_organizations":
+            external_id = arguments.get("external_id") if arguments else None
+            name = arguments.get("name") if arguments else None
+            organizations = zendesk_client.get_organizations(external_id=external_id, name=name)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(organizations, indent=2)
+            )]
+
+        elif name == "get_organization_details":
+            if not arguments or "org_id" not in arguments:
+                raise ValueError("Missing required argument: org_id")
+            org_id = arguments["org_id"]
+            org_details = zendesk_client.get_organization_details(org_id=org_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(org_details, indent=2)
+            )]
+
+        elif name == "update_organization":
+            if not arguments or "org_id" not in arguments:
+                raise ValueError("Missing required argument: org_id")
+            org_id = arguments["org_id"]
+            name = arguments.get("name") if arguments else None
+            details = arguments.get("details") if arguments else None
+            notes = arguments.get("notes") if arguments else None
+            result = zendesk_client.update_organization(org_id=org_id, name=name, details=details, notes=notes)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_organization_users":
+            if not arguments or "org_id" not in arguments:
+                raise ValueError("Missing required argument: org_id")
+            org_id = arguments["org_id"]
+            users = zendesk_client.get_organization_users(org_id=org_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(users, indent=2)
+            )]
+
+        elif name == "create_user":
+            if not arguments or "name" not in arguments or "email" not in arguments:
+                raise ValueError("Missing required arguments: name and email")
+            name = arguments["name"]
+            email = arguments["email"]
+            role = arguments.get("role", "end-user") if arguments else "end-user"
+            organization_id = arguments.get("organization_id") if arguments else None
+            result = zendesk_client.create_user(name=name, email=email, role=role, organization_id=organization_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "update_user":
+            if not arguments or "user_id" not in arguments:
+                raise ValueError("Missing required argument: user_id")
+            user_id = arguments["user_id"]
+            name = arguments.get("name") if arguments else None
+            email = arguments.get("email") if arguments else None
+            role = arguments.get("role") if arguments else None
+            result = zendesk_client.update_user(user_id=user_id, name=name, email=email, role=role)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "suspend_user":
+            if not arguments or "user_id" not in arguments:
+                raise ValueError("Missing required argument: user_id")
+            user_id = arguments["user_id"]
+            reason = arguments.get("reason") if arguments else None
+            result = zendesk_client.suspend_user(user_id=user_id, reason=reason)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "search_users":
+            query = arguments.get("query") if arguments else None
+            role = arguments.get("role") if arguments else None
+            organization_id = arguments.get("organization_id") if arguments else None
+            users = zendesk_client.search_users(query=query, role=role, organization_id=organization_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(users, indent=2)
+            )]
+
+        elif name == "get_user_identities":
+            if not arguments or "user_id" not in arguments:
+                raise ValueError("Missing required argument: user_id")
+            user_id = arguments["user_id"]
+            identities = zendesk_client.get_user_identities(user_id=user_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(identities, indent=2)
+            )]
+
+        elif name == "get_groups":
+            groups = zendesk_client.get_groups()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(groups, indent=2)
+            )]
+
+        elif name == "get_group_memberships":
+            group_id = arguments.get("group_id") if arguments else None
+            user_id = arguments.get("user_id") if arguments else None
+            memberships = zendesk_client.get_group_memberships(group_id=group_id, user_id=user_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(memberships, indent=2)
+            )]
+
+        elif name == "assign_agent_to_group":
+            if not arguments or "user_id" not in arguments or "group_id" not in arguments:
+                raise ValueError("Missing required arguments: user_id and group_id")
+            user_id = arguments["user_id"]
+            group_id = arguments["group_id"]
+            is_default = arguments.get("is_default", False) if arguments else False
+            result = zendesk_client.assign_agent_to_group(user_id=user_id, group_id=group_id, is_default=is_default)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "remove_agent_from_group":
+            if not arguments or "user_id" not in arguments or "group_id" not in arguments:
+                raise ValueError("Missing required arguments: user_id and group_id")
+            user_id = arguments["user_id"]
+            group_id = arguments["group_id"]
+            result = zendesk_client.remove_agent_from_group(user_id=user_id, group_id=group_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_ticket_fields":
+            fields = zendesk_client.get_ticket_fields()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(fields, indent=2)
+            )]
+
+        elif name == "get_user_fields":
+            fields = zendesk_client.get_user_fields()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(fields, indent=2)
+            )]
+
+        elif name == "get_organization_fields":
+            fields = zendesk_client.get_organization_fields()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(fields, indent=2)
+            )]
+
+        elif name == "advanced_search":
+            search_type = arguments.get("search_type") if arguments else None
+            query = arguments.get("query") if arguments else None
+            sort_by = arguments.get("sort_by") if arguments else None
+            sort_order = arguments.get("sort_order") if arguments else None
+            results = zendesk_client.advanced_search(search_type=search_type, query=query, sort_by=sort_by, sort_order=sort_order)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "export_search_results":
+            query = arguments.get("query") if arguments else None
+            object_type = arguments.get("object_type", "ticket") if arguments else "ticket"
+            results = zendesk_client.export_search_results(query=query, object_type=object_type)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "get_automations":
+            automations = zendesk_client.get_automations()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(automations, indent=2)
+            )]
+
+        elif name == "get_triggers":
+            triggers = zendesk_client.get_triggers()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(triggers, indent=2)
+            )]
+
+        elif name == "get_sla_policies":
+            sla_policies = zendesk_client.get_sla_policies()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(sla_policies, indent=2)
+            )]
+
+        elif name == "search_help_center":
+            query = arguments.get("query") if arguments else None
+            locale = arguments.get("locale", "en-us") if arguments else "en-us"
+            category_id = arguments.get("category_id") if arguments else None
+            articles = zendesk_client.search_help_center(query=query, locale=locale, category_id=category_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(articles, indent=2)
+            )]
+
+        elif name == "get_help_center_articles":
+            section_id = arguments.get("section_id") if arguments else None
+            category_id = arguments.get("category_id") if arguments else None
+            articles = zendesk_client.get_help_center_articles(section_id=section_id, category_id=category_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(articles, indent=2)
+            )]
+
+        elif name == "get_ticket_audits":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            audits = zendesk_client.get_ticket_audits(ticket_id=ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(audits, indent=2)
+            )]
+
+        elif name == "get_ticket_events":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            events = zendesk_client.get_ticket_events(ticket_id=ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(events, indent=2)
+            )]
+
+        elif name == "add_ticket_collaborators":
+            if not arguments or "ticket_id" not in arguments or "email_addresses" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id and email_addresses")
+            ticket_id = arguments["ticket_id"]
+            email_addresses = arguments["email_addresses"]
+            result = zendesk_client.add_ticket_collaborators(ticket_id=ticket_id, email_addresses=email_addresses)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_ticket_collaborators":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            collaborators = zendesk_client.get_ticket_collaborators(ticket_id=ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(collaborators, indent=2)
+            )]
+
+        elif name == "remove_ticket_collaborators":
+            if not arguments or "ticket_id" not in arguments or "user_ids" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id and user_ids")
+            ticket_id = arguments["ticket_id"]
+            user_ids = arguments["user_ids"]
+            result = zendesk_client.remove_ticket_collaborators(ticket_id=ticket_id, user_ids=user_ids)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(result, indent=2)
+            )]
+
+        elif name == "get_incremental_tickets":
+            start_time = arguments.get("start_time") if arguments else None
+            cursor = arguments.get("cursor") if arguments else None
+            tickets = zendesk_client.get_incremental_tickets(start_time=start_time, cursor=cursor)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(tickets, indent=2)
+            )]
+
+        elif name == "get_ticket_metrics_detailed":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            ticket_id = arguments["ticket_id"]
+            metrics = zendesk_client.get_ticket_metrics_detailed(ticket_id=ticket_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(metrics, indent=2)
+            )]
+
+        elif name == "generate_agent_activity_report":
+            if not arguments or "agent_id" not in arguments or "start_date" not in arguments or "end_date" not in arguments:
+                raise ValueError("Missing required arguments: agent_id, start_date, and end_date")
+            agent_id = arguments["agent_id"]
+            start_date = arguments["start_date"]
+            end_date = arguments["end_date"]
+            report = zendesk_client.generate_agent_activity_report(agent_id=agent_id, start_date=start_date, end_date=end_date)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(report, indent=2)
             )]
 
         else:

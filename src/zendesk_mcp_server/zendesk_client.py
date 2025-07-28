@@ -1904,3 +1904,2028 @@ class ZendeskClient:
             next_steps.append("Immediate response protocol activated")
         
         return next_steps[:5]
+
+    # =====================================
+    # MACROS AND TEMPLATES MANAGEMENT
+    # =====================================
+    
+    def get_macros(self) -> Dict[str, Any]:
+        """Get all available macros for agents to use in tickets"""
+        try:
+            macros = list(self.client.macros())
+            
+            macro_list = []
+            for macro in macros:
+                macro_data = {
+                    'id': getattr(macro, 'id', None),
+                    'title': getattr(macro, 'title', 'Untitled'),
+                    'active': getattr(macro, 'active', True),
+                    'description': getattr(macro, 'description', ''),
+                    'position': getattr(macro, 'position', 0),
+                    'usage_1h': getattr(macro, 'usage_1h', 0),
+                    'usage_7d': getattr(macro, 'usage_7d', 0),
+                    'usage_30d': getattr(macro, 'usage_30d', 0),
+                    'created_at': getattr(macro, 'created_at', None),
+                    'updated_at': getattr(macro, 'updated_at', None)
+                }
+                macro_list.append(macro_data)
+            
+            # Sort by usage (most used first)
+            macro_list.sort(key=lambda x: x['usage_30d'], reverse=True)
+            
+            return {
+                'status': 'success',
+                'total_macros': len(macro_list),
+                'macros': macro_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get macros: {str(e)}'
+            }
+
+    def apply_macro_to_ticket(self, ticket_id: int, macro_id: int) -> Dict[str, Any]:
+        """Apply a macro to a specific ticket"""
+        try:
+            # Get the macro first to verify it exists
+            macro = self.client.macros(id=macro_id)
+            if not macro:
+                return {
+                    'status': 'error',
+                    'message': f'Macro {macro_id} not found'
+                }
+            
+            # Apply the macro to the ticket
+            result = self.client.tickets.macros.apply(ticket_id, macro_id)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'macro_id': macro_id,
+                'macro_title': getattr(macro, 'title', 'Unknown'),
+                'result': 'Macro applied successfully'
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to apply macro to ticket: {str(e)}'
+            }
+
+    def get_ticket_forms(self) -> Dict[str, Any]:
+        """Get all ticket forms and their field configurations"""
+        try:
+            ticket_forms = list(self.client.ticket_forms())
+            
+            forms_list = []
+            for form in ticket_forms:
+                form_data = {
+                    'id': getattr(form, 'id', None),
+                    'name': getattr(form, 'name', 'Unnamed Form'),
+                    'display_name': getattr(form, 'display_name', ''),
+                    'active': getattr(form, 'active', True),
+                    'default': getattr(form, 'default', False),
+                    'position': getattr(form, 'position', 0),
+                    'ticket_field_ids': getattr(form, 'ticket_field_ids', []),
+                    'created_at': getattr(form, 'created_at', None),
+                    'updated_at': getattr(form, 'updated_at', None)
+                }
+                forms_list.append(form_data)
+            
+            return {
+                'status': 'success',
+                'total_forms': len(forms_list),
+                'ticket_forms': forms_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get ticket forms: {str(e)}'
+            }
+
+    # =====================================
+    # ADVANCED TICKET OPERATIONS
+    # =====================================
+    
+    def merge_tickets(self, source_ticket_ids: List[int], target_ticket_id: int) -> Dict[str, Any]:
+        """Merge multiple source tickets into one target ticket"""
+        try:
+            # Verify target ticket exists
+            target_ticket = self.client.tickets(id=target_ticket_id)
+            if not target_ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Target ticket {target_ticket_id} not found'
+                }
+            
+            merged_results = []
+            for source_id in source_ticket_ids:
+                try:
+                    # Get source ticket
+                    source_ticket = self.client.tickets(id=source_id)
+                    if not source_ticket:
+                        merged_results.append({
+                            'source_ticket_id': source_id,
+                            'status': 'failed',
+                            'reason': 'Source ticket not found'
+                        })
+                        continue
+                    
+                    # Merge the ticket (in Zendesk, this involves updating the source ticket)
+                    merge_data = {
+                        'status': 'closed',
+                        'comment': {
+                            'body': f'This ticket has been merged into ticket #{target_ticket_id}',
+                            'public': False
+                        }
+                    }
+                    
+                    self.client.tickets.update(source_id, merge_data)
+                    
+                    # Add a comment to the target ticket
+                    target_comment = {
+                        'body': f'Ticket #{source_id} has been merged into this ticket',
+                        'public': False
+                    }
+                    self.client.ticket_comments.create(target_ticket_id, target_comment)
+                    
+                    merged_results.append({
+                        'source_ticket_id': source_id,
+                        'status': 'success',
+                        'reason': 'Merged successfully'
+                    })
+                    
+                except Exception as e:
+                    merged_results.append({
+                        'source_ticket_id': source_id,
+                        'status': 'failed',
+                        'reason': str(e)
+                    })
+            
+            successful_merges = len([r for r in merged_results if r['status'] == 'success'])
+            
+            return {
+                'status': 'success',
+                'target_ticket_id': target_ticket_id,
+                'total_source_tickets': len(source_ticket_ids),
+                'successful_merges': successful_merges,
+                'merge_results': merged_results
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to merge tickets: {str(e)}'
+            }
+
+    def clone_ticket(self, ticket_id: int, include_comments: bool = False) -> Dict[str, Any]:
+        """Clone a ticket with optional comments"""
+        try:
+            # Get the original ticket
+            original_ticket = self.client.tickets(id=ticket_id)
+            if not original_ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Create new ticket data based on original
+            new_ticket_data = {
+                'subject': f"[CLONED] {getattr(original_ticket, 'subject', 'No Subject')}",
+                'description': getattr(original_ticket, 'description', ''),
+                'priority': getattr(original_ticket, 'priority', 'normal'),
+                'type': getattr(original_ticket, 'type', None),
+                'status': 'new',  # Always create as new
+                'requester_id': getattr(original_ticket, 'requester_id', None),
+                'assignee_id': getattr(original_ticket, 'assignee_id', None),
+                'group_id': getattr(original_ticket, 'group_id', None),
+                'tags': getattr(original_ticket, 'tags', []) + ['cloned'],
+                'custom_fields': getattr(original_ticket, 'custom_fields', [])
+            }
+            
+            # Create the new ticket
+            new_ticket = self.client.tickets.create(new_ticket_data)
+            new_ticket_id = getattr(new_ticket, 'id', None)
+            
+            # Add comments if requested
+            comments_cloned = 0
+            if include_comments and new_ticket_id:
+                try:
+                    comments = list(self.client.tickets.comments(ticket_id))
+                    for comment in comments:
+                        if getattr(comment, 'public', False):  # Only clone public comments
+                            comment_data = {
+                                'body': f"[CLONED FROM TICKET #{ticket_id}]\n\n{getattr(comment, 'body', '')}",
+                                'public': True
+                            }
+                            self.client.ticket_comments.create(new_ticket_id, comment_data)
+                            comments_cloned += 1
+                except Exception:
+                    pass  # Continue even if comments fail
+            
+            # Add reference comment to original ticket
+            try:
+                reference_comment = {
+                    'body': f'This ticket has been cloned to ticket #{new_ticket_id}',
+                    'public': False
+                }
+                self.client.ticket_comments.create(ticket_id, reference_comment)
+            except Exception:
+                pass  # Continue even if reference comment fails
+            
+            return {
+                'status': 'success',
+                'original_ticket_id': ticket_id,
+                'new_ticket_id': new_ticket_id,
+                'comments_cloned': comments_cloned,
+                'include_comments': include_comments
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to clone ticket: {str(e)}'
+            }
+
+    def add_ticket_tags(self, ticket_id: int, tags: List[str]) -> Dict[str, Any]:
+        """Add tags to a ticket"""
+        try:
+            # Get current ticket
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get current tags and add new ones
+            current_tags = getattr(ticket, 'tags', [])
+            new_tags = list(set(current_tags + tags))  # Remove duplicates
+            
+            # Update ticket with new tags
+            update_data = {'tags': new_tags}
+            self.client.tickets.update(ticket_id, update_data)
+            
+            added_tags = [tag for tag in tags if tag not in current_tags]
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'tags_added': added_tags,
+                'current_tags': new_tags,
+                'total_tags': len(new_tags)
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to add tags to ticket: {str(e)}'
+            }
+
+    def remove_ticket_tags(self, ticket_id: int, tags: List[str]) -> Dict[str, Any]:
+        """Remove specific tags from a ticket"""
+        try:
+            # Get current ticket
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get current tags and remove specified ones
+            current_tags = getattr(ticket, 'tags', [])
+            new_tags = [tag for tag in current_tags if tag not in tags]
+            
+            # Update ticket with remaining tags
+            update_data = {'tags': new_tags}
+            self.client.tickets.update(ticket_id, update_data)
+            
+            removed_tags = [tag for tag in tags if tag in current_tags]
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'tags_removed': removed_tags,
+                'current_tags': new_tags,
+                'total_tags': len(new_tags)
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to remove tags from ticket: {str(e)}'
+            }
+
+    def get_ticket_related_tickets(self, ticket_id: int) -> Dict[str, Any]:
+        """Get tickets related to the current ticket"""
+        try:
+            # Get the main ticket
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            related_tickets = []
+            
+            # Find tickets from the same requester
+            requester_id = getattr(ticket, 'requester_id', None)
+            if requester_id:
+                try:
+                    requester_query = f"type:ticket requester:{requester_id}"
+                    requester_tickets = list(self.client.search(query=requester_query))
+                    for rel_ticket in requester_tickets[:10]:  # Limit to 10
+                        if getattr(rel_ticket, 'id', None) != ticket_id:
+                            related_tickets.append({
+                                'id': getattr(rel_ticket, 'id', None),
+                                'subject': getattr(rel_ticket, 'subject', 'No Subject'),
+                                'status': getattr(rel_ticket, 'status', 'unknown'),
+                                'relationship': 'same_requester',
+                                'created_at': getattr(rel_ticket, 'created_at', None)
+                            })
+                except Exception:
+                    pass
+            
+            # Find tickets with similar tags
+            tags = getattr(ticket, 'tags', [])
+            if tags:
+                try:
+                    tag_query = f"type:ticket tags:{tags[0]}"  # Use first tag
+                    tag_tickets = list(self.client.search(query=tag_query))
+                    for rel_ticket in tag_tickets[:5]:  # Limit to 5
+                        if getattr(rel_ticket, 'id', None) != ticket_id:
+                            related_tickets.append({
+                                'id': getattr(rel_ticket, 'id', None),
+                                'subject': getattr(rel_ticket, 'subject', 'No Subject'),
+                                'status': getattr(rel_ticket, 'status', 'unknown'),
+                                'relationship': 'similar_tags',
+                                'created_at': getattr(rel_ticket, 'created_at', None)
+                            })
+                except Exception:
+                    pass
+            
+            # Remove duplicates
+            seen_ids = set()
+            unique_related = []
+            for rel_ticket in related_tickets:
+                if rel_ticket['id'] not in seen_ids:
+                    seen_ids.add(rel_ticket['id'])
+                    unique_related.append(rel_ticket)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'related_tickets_count': len(unique_related),
+                'related_tickets': unique_related
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get related tickets: {str(e)}'
+            }
+
+    # =====================================
+    # ORGANIZATION MANAGEMENT
+    # =====================================
+    
+    def get_organizations(self, external_id: str = None, name: str = None) -> Dict[str, Any]:
+        """Get organizations with optional filtering"""
+        try:
+            organizations = []
+            
+            if external_id:
+                # Search by external ID
+                try:
+                    org = self.client.organizations(external_id=external_id)
+                    if org:
+                        organizations = [org]
+                except Exception:
+                    pass
+            elif name:
+                # Search by name
+                try:
+                    search_query = f"type:organization name:{name}"
+                    search_results = list(self.client.search(query=search_query))
+                    organizations = search_results
+                except Exception:
+                    pass
+            else:
+                # Get all organizations (paginated)
+                organizations = list(self.client.organizations())
+            
+            org_list = []
+            for org in organizations[:100]:  # Limit to 100
+                org_data = {
+                    'id': getattr(org, 'id', None),
+                    'name': getattr(org, 'name', 'Unnamed Organization'),
+                    'external_id': getattr(org, 'external_id', None),
+                    'details': getattr(org, 'details', ''),
+                    'notes': getattr(org, 'notes', ''),
+                    'shared_tickets': getattr(org, 'shared_tickets', False),
+                    'shared_comments': getattr(org, 'shared_comments', False),
+                    'tags': getattr(org, 'tags', []),
+                    'created_at': getattr(org, 'created_at', None),
+                    'updated_at': getattr(org, 'updated_at', None)
+                }
+                org_list.append(org_data)
+            
+            return {
+                'status': 'success',
+                'total_organizations': len(org_list),
+                'organizations': org_list,
+                'filters_applied': {
+                    'external_id': external_id,
+                    'name': name
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get organizations: {str(e)}'
+            }
+
+    def get_organization_details(self, org_id: int) -> Dict[str, Any]:
+        """Get detailed organization information including custom fields"""
+        try:
+            organization = self.client.organizations(id=org_id)
+            if not organization:
+                return {
+                    'status': 'error',
+                    'message': f'Organization {org_id} not found'
+                }
+            
+            # Get organization details
+            org_details = {
+                'id': getattr(organization, 'id', None),
+                'name': getattr(organization, 'name', 'Unnamed Organization'),
+                'external_id': getattr(organization, 'external_id', None),
+                'details': getattr(organization, 'details', ''),
+                'notes': getattr(organization, 'notes', ''),
+                'shared_tickets': getattr(organization, 'shared_tickets', False),
+                'shared_comments': getattr(organization, 'shared_comments', False),
+                'tags': getattr(organization, 'tags', []),
+                'domain_names': getattr(organization, 'domain_names', []),
+                'organization_fields': getattr(organization, 'organization_fields', {}),
+                'created_at': getattr(organization, 'created_at', None),
+                'updated_at': getattr(organization, 'updated_at', None)
+            }
+            
+            # Get organization users count
+            try:
+                users = list(self.client.organizations.users(org_id))
+                org_details['user_count'] = len(users)
+            except Exception:
+                org_details['user_count'] = 0
+            
+            # Get organization tickets count
+            try:
+                tickets_query = f"type:ticket organization:{org_id}"
+                tickets = list(self.client.search(query=tickets_query))
+                org_details['ticket_count'] = len(tickets)
+            except Exception:
+                org_details['ticket_count'] = 0
+            
+            return {
+                'status': 'success',
+                'organization': org_details
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get organization details: {str(e)}'
+            }
+
+    def update_organization(self, org_id: int, name: str = None, details: str = None, notes: str = None, **kwargs) -> Dict[str, Any]:
+        """Update organization details"""
+        try:
+            # Verify organization exists
+            organization = self.client.organizations(id=org_id)
+            if not organization:
+                return {
+                    'status': 'error',
+                    'message': f'Organization {org_id} not found'
+                }
+            
+            # Build update data
+            update_data = {}
+            if name is not None:
+                update_data['name'] = name
+            if details is not None:
+                update_data['details'] = details
+            if notes is not None:
+                update_data['notes'] = notes
+            
+            # Add any additional fields
+            for key, value in kwargs.items():
+                if value is not None:
+                    update_data[key] = value
+            
+            if not update_data:
+                return {
+                    'status': 'error',
+                    'message': 'No update data provided'
+                }
+            
+            # Update the organization
+            updated_org = self.client.organizations.update(org_id, update_data)
+            
+            return {
+                'status': 'success',
+                'organization_id': org_id,
+                'updated_fields': list(update_data.keys()),
+                'organization': {
+                    'id': getattr(updated_org, 'id', None),
+                    'name': getattr(updated_org, 'name', ''),
+                    'details': getattr(updated_org, 'details', ''),
+                    'notes': getattr(updated_org, 'notes', ''),
+                    'updated_at': getattr(updated_org, 'updated_at', None)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to update organization: {str(e)}'
+            }
+
+    def get_organization_users(self, org_id: int) -> Dict[str, Any]:
+        """Get all users in an organization"""
+        try:
+            # Verify organization exists
+            organization = self.client.organizations(id=org_id)
+            if not organization:
+                return {
+                    'status': 'error',
+                    'message': f'Organization {org_id} not found'
+                }
+            
+            # Get organization users
+            users = list(self.client.organizations.users(org_id))
+            
+            user_list = []
+            for user in users:
+                user_data = {
+                    'id': getattr(user, 'id', None),
+                    'name': getattr(user, 'name', 'Unnamed User'),
+                    'email': getattr(user, 'email', ''),
+                    'role': getattr(user, 'role', 'end-user'),
+                    'active': getattr(user, 'active', True),
+                    'verified': getattr(user, 'verified', False),
+                    'suspended': getattr(user, 'suspended', False),
+                    'last_login_at': getattr(user, 'last_login_at', None),
+                    'created_at': getattr(user, 'created_at', None)
+                }
+                user_list.append(user_data)
+            
+            # Sort by role and name
+            user_list.sort(key=lambda x: (x['role'], x['name']))
+            
+            return {
+                'status': 'success',
+                'organization_id': org_id,
+                'organization_name': getattr(organization, 'name', 'Unknown'),
+                'total_users': len(user_list),
+                'users': user_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get organization users: {str(e)}'
+            }
+
+    # =====================================
+    # ADVANCED USER MANAGEMENT
+    # =====================================
+    
+    def create_user(self, name: str, email: str, role: str = "end-user", organization_id: int = None, **kwargs) -> Dict[str, Any]:
+        """Create a new user"""
+        try:
+            # Build user data
+            user_data = {
+                'name': name,
+                'email': email,
+                'role': role
+            }
+            
+            if organization_id:
+                user_data['organization_id'] = organization_id
+            
+            # Add any additional fields
+            for key, value in kwargs.items():
+                if value is not None:
+                    user_data[key] = value
+            
+            # Create the user
+            new_user = self.client.users.create(user_data)
+            
+            return {
+                'status': 'success',
+                'user': {
+                    'id': getattr(new_user, 'id', None),
+                    'name': getattr(new_user, 'name', ''),
+                    'email': getattr(new_user, 'email', ''),
+                    'role': getattr(new_user, 'role', ''),
+                    'organization_id': getattr(new_user, 'organization_id', None),
+                    'active': getattr(new_user, 'active', True),
+                    'verified': getattr(new_user, 'verified', False),
+                    'created_at': getattr(new_user, 'created_at', None)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to create user: {str(e)}'
+            }
+
+    def update_user(self, user_id: int, name: str = None, email: str = None, role: str = None, **kwargs) -> Dict[str, Any]:
+        """Update user information"""
+        try:
+            # Verify user exists
+            user = self.client.users(id=user_id)
+            if not user:
+                return {
+                    'status': 'error',
+                    'message': f'User {user_id} not found'
+                }
+            
+            # Build update data
+            update_data = {}
+            if name is not None:
+                update_data['name'] = name
+            if email is not None:
+                update_data['email'] = email
+            if role is not None:
+                update_data['role'] = role
+            
+            # Add any additional fields
+            for key, value in kwargs.items():
+                if value is not None:
+                    update_data[key] = value
+            
+            if not update_data:
+                return {
+                    'status': 'error',
+                    'message': 'No update data provided'
+                }
+            
+            # Update the user
+            updated_user = self.client.users.update(user_id, update_data)
+            
+            return {
+                'status': 'success',
+                'user_id': user_id,
+                'updated_fields': list(update_data.keys()),
+                'user': {
+                    'id': getattr(updated_user, 'id', None),
+                    'name': getattr(updated_user, 'name', ''),
+                    'email': getattr(updated_user, 'email', ''),
+                    'role': getattr(updated_user, 'role', ''),
+                    'organization_id': getattr(updated_user, 'organization_id', None),
+                    'active': getattr(updated_user, 'active', True),
+                    'updated_at': getattr(updated_user, 'updated_at', None)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to update user: {str(e)}'
+            }
+
+    def suspend_user(self, user_id: int, reason: str = None) -> Dict[str, Any]:
+        """Suspend a user account"""
+        try:
+            # Verify user exists
+            user = self.client.users(id=user_id)
+            if not user:
+                return {
+                    'status': 'error',
+                    'message': f'User {user_id} not found'
+                }
+            
+            # Suspend the user
+            update_data = {'suspended': True}
+            if reason:
+                update_data['notes'] = f"Suspended: {reason}"
+            
+            updated_user = self.client.users.update(user_id, update_data)
+            
+            return {
+                'status': 'success',
+                'user_id': user_id,
+                'action': 'suspended',
+                'reason': reason,
+                'user': {
+                    'id': getattr(updated_user, 'id', None),
+                    'name': getattr(updated_user, 'name', ''),
+                    'email': getattr(updated_user, 'email', ''),
+                    'suspended': getattr(updated_user, 'suspended', False),
+                    'updated_at': getattr(updated_user, 'updated_at', None)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to suspend user: {str(e)}'
+            }
+
+    def search_users(self, query: str, role: str = None, organization_id: int = None) -> Dict[str, Any]:
+        """Search for users with advanced filters"""
+        try:
+            # Build search query
+            search_query = f"type:user {query}"
+            
+            if role:
+                search_query += f" role:{role}"
+            if organization_id:
+                search_query += f" organization_id:{organization_id}"
+            
+            # Perform search
+            search_results = list(self.client.search(query=search_query))
+            
+            user_list = []
+            for user in search_results[:50]:  # Limit to 50 results
+                user_data = {
+                    'id': getattr(user, 'id', None),
+                    'name': getattr(user, 'name', 'Unnamed User'),
+                    'email': getattr(user, 'email', ''),
+                    'role': getattr(user, 'role', 'end-user'),
+                    'organization_id': getattr(user, 'organization_id', None),
+                    'active': getattr(user, 'active', True),
+                    'verified': getattr(user, 'verified', False),
+                    'suspended': getattr(user, 'suspended', False),
+                    'last_login_at': getattr(user, 'last_login_at', None),
+                    'created_at': getattr(user, 'created_at', None)
+                }
+                user_list.append(user_data)
+            
+            return {
+                'status': 'success',
+                'search_query': search_query,
+                'total_results': len(user_list),
+                'users': user_list,
+                'filters_applied': {
+                    'query': query,
+                    'role': role,
+                    'organization_id': organization_id
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to search users: {str(e)}'
+            }
+
+    def get_user_identities(self, user_id: int) -> Dict[str, Any]:
+        """Get user identity information (email addresses, phone numbers, etc.)"""
+        try:
+            # Verify user exists
+            user = self.client.users(id=user_id)
+            if not user:
+                return {
+                    'status': 'error',
+                    'message': f'User {user_id} not found'
+                }
+            
+            # Get user identities
+            identities = list(self.client.users.identities(user_id))
+            
+            identity_list = []
+            for identity in identities:
+                identity_data = {
+                    'id': getattr(identity, 'id', None),
+                    'type': getattr(identity, 'type', 'unknown'),
+                    'value': getattr(identity, 'value', ''),
+                    'primary': getattr(identity, 'primary', False),
+                    'verified': getattr(identity, 'verified', False),
+                    'created_at': getattr(identity, 'created_at', None),
+                    'updated_at': getattr(identity, 'updated_at', None)
+                }
+                identity_list.append(identity_data)
+            
+            return {
+                'status': 'success',
+                'user_id': user_id,
+                'user_name': getattr(user, 'name', 'Unknown'),
+                'total_identities': len(identity_list),
+                'identities': identity_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get user identities: {str(e)}'
+            }
+
+    # =====================================
+    # GROUPS AND AGENT MANAGEMENT
+    # =====================================
+    
+    def get_groups(self) -> Dict[str, Any]:
+        """Get all support groups"""
+        try:
+            groups = list(self.client.groups())
+            
+            group_list = []
+            for group in groups:
+                group_data = {
+                    'id': getattr(group, 'id', None),
+                    'name': getattr(group, 'name', 'Unnamed Group'),
+                    'description': getattr(group, 'description', ''),
+                    'default': getattr(group, 'default', False),
+                    'deleted': getattr(group, 'deleted', False),
+                    'created_at': getattr(group, 'created_at', None),
+                    'updated_at': getattr(group, 'updated_at', None)
+                }
+                
+                # Get group member count
+                try:
+                    memberships = list(self.client.group_memberships(group_id=group.id))
+                    group_data['member_count'] = len(memberships)
+                except Exception:
+                    group_data['member_count'] = 0
+                
+                group_list.append(group_data)
+            
+            return {
+                'status': 'success',
+                'total_groups': len(group_list),
+                'groups': group_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get groups: {str(e)}'
+            }
+
+    def get_group_memberships(self, group_id: int = None, user_id: int = None) -> Dict[str, Any]:
+        """Get group memberships"""
+        try:
+            memberships = []
+            
+            if group_id and user_id:
+                # Get specific membership
+                try:
+                    membership = self.client.group_memberships(group_id=group_id, user_id=user_id)
+                    if membership:
+                        memberships = [membership]
+                except Exception:
+                    pass
+            elif group_id:
+                # Get all memberships for a group
+                memberships = list(self.client.group_memberships(group_id=group_id))
+            elif user_id:
+                # Get all memberships for a user
+                memberships = list(self.client.group_memberships(user_id=user_id))
+            else:
+                # Get all memberships (limited)
+                memberships = list(self.client.group_memberships())[:100]
+            
+            membership_list = []
+            for membership in memberships:
+                membership_data = {
+                    'id': getattr(membership, 'id', None),
+                    'user_id': getattr(membership, 'user_id', None),
+                    'group_id': getattr(membership, 'group_id', None),
+                    'default': getattr(membership, 'default', False),
+                    'created_at': getattr(membership, 'created_at', None),
+                    'updated_at': getattr(membership, 'updated_at', None)
+                }
+                
+                # Try to get user and group names
+                try:
+                    user = self.client.users(id=membership_data['user_id'])
+                    membership_data['user_name'] = getattr(user, 'name', 'Unknown')
+                except Exception:
+                    membership_data['user_name'] = 'Unknown'
+                
+                try:
+                    group = self.client.groups(id=membership_data['group_id'])
+                    membership_data['group_name'] = getattr(group, 'name', 'Unknown')
+                except Exception:
+                    membership_data['group_name'] = 'Unknown'
+                
+                membership_list.append(membership_data)
+            
+            return {
+                'status': 'success',
+                'total_memberships': len(membership_list),
+                'memberships': membership_list,
+                'filters_applied': {
+                    'group_id': group_id,
+                    'user_id': user_id
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get group memberships: {str(e)}'
+            }
+
+    def assign_agent_to_group(self, user_id: int, group_id: int, is_default: bool = False) -> Dict[str, Any]:
+        """Assign an agent to a group"""
+        try:
+            # Verify user and group exist
+            user = self.client.users(id=user_id)
+            if not user:
+                return {
+                    'status': 'error',
+                    'message': f'User {user_id} not found'
+                }
+            
+            group = self.client.groups(id=group_id)
+            if not group:
+                return {
+                    'status': 'error',
+                    'message': f'Group {group_id} not found'
+                }
+            
+            # Check if user is an agent
+            user_role = getattr(user, 'role', 'end-user')
+            if user_role not in ['agent', 'admin']:
+                return {
+                    'status': 'error',
+                    'message': f'User must be an agent or admin to be assigned to groups. Current role: {user_role}'
+                }
+            
+            # Create group membership
+            membership_data = {
+                'user_id': user_id,
+                'group_id': group_id,
+                'default': is_default
+            }
+            
+            membership = self.client.group_memberships.create(membership_data)
+            
+            return {
+                'status': 'success',
+                'membership': {
+                    'id': getattr(membership, 'id', None),
+                    'user_id': user_id,
+                    'user_name': getattr(user, 'name', 'Unknown'),
+                    'group_id': group_id,
+                    'group_name': getattr(group, 'name', 'Unknown'),
+                    'default': getattr(membership, 'default', False),
+                    'created_at': getattr(membership, 'created_at', None)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to assign agent to group: {str(e)}'
+            }
+
+    def remove_agent_from_group(self, user_id: int, group_id: int) -> Dict[str, Any]:
+        """Remove an agent from a group"""
+        try:
+            # Find the membership
+            memberships = list(self.client.group_memberships(user_id=user_id))
+            target_membership = None
+            
+            for membership in memberships:
+                if getattr(membership, 'group_id', None) == group_id:
+                    target_membership = membership
+                    break
+            
+            if not target_membership:
+                return {
+                    'status': 'error',
+                    'message': f'User {user_id} is not a member of group {group_id}'
+                }
+            
+            # Delete the membership
+            membership_id = getattr(target_membership, 'id', None)
+            self.client.group_memberships.delete(membership_id)
+            
+            return {
+                'status': 'success',
+                'action': 'removed',
+                'user_id': user_id,
+                'group_id': group_id,
+                'membership_id': membership_id
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to remove agent from group: {str(e)}'
+            }
+
+    # =====================================
+    # CUSTOM FIELDS AND TICKET FIELDS
+    # =====================================
+    
+    def get_ticket_fields(self) -> Dict[str, Any]:
+        """Get all ticket fields including custom fields with their configurations"""
+        try:
+            ticket_fields = list(self.client.ticket_fields())
+            
+            field_list = []
+            for field in ticket_fields:
+                field_data = {
+                    'id': getattr(field, 'id', None),
+                    'type': getattr(field, 'type', 'text'),
+                    'title': getattr(field, 'title', 'Untitled Field'),
+                    'description': getattr(field, 'description', ''),
+                    'position': getattr(field, 'position', 0),
+                    'active': getattr(field, 'active', True),
+                    'required': getattr(field, 'required', False),
+                    'collapsed_for_agents': getattr(field, 'collapsed_for_agents', False),
+                    'regexp_for_validation': getattr(field, 'regexp_for_validation', None),
+                    'title_in_portal': getattr(field, 'title_in_portal', ''),
+                    'visible_in_portal': getattr(field, 'visible_in_portal', True),
+                    'editable_in_portal': getattr(field, 'editable_in_portal', True),
+                    'required_in_portal': getattr(field, 'required_in_portal', False),
+                    'tag': getattr(field, 'tag', None),
+                    'created_at': getattr(field, 'created_at', None),
+                    'updated_at': getattr(field, 'updated_at', None)
+                }
+                
+                # Add custom field options if they exist
+                if hasattr(field, 'custom_field_options'):
+                    options = getattr(field, 'custom_field_options', [])
+                    field_data['options'] = [
+                        {
+                            'id': getattr(option, 'id', None),
+                            'name': getattr(option, 'name', ''),
+                            'value': getattr(option, 'value', ''),
+                            'position': getattr(option, 'position', 0)
+                        }
+                        for option in options
+                    ]
+                
+                field_list.append(field_data)
+            
+            # Sort by position
+            field_list.sort(key=lambda x: x['position'])
+            
+            return {
+                'status': 'success',
+                'total_fields': len(field_list),
+                'ticket_fields': field_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get ticket fields: {str(e)}'
+            }
+
+    def get_user_fields(self) -> Dict[str, Any]:
+        """Get all user fields including custom fields"""
+        try:
+            user_fields = list(self.client.user_fields())
+            
+            field_list = []
+            for field in user_fields:
+                field_data = {
+                    'id': getattr(field, 'id', None),
+                    'type': getattr(field, 'type', 'text'),
+                    'key': getattr(field, 'key', ''),
+                    'title': getattr(field, 'title', 'Untitled Field'),
+                    'description': getattr(field, 'description', ''),
+                    'position': getattr(field, 'position', 0),
+                    'active': getattr(field, 'active', True),
+                    'system': getattr(field, 'system', False),
+                    'regexp_for_validation': getattr(field, 'regexp_for_validation', None),
+                    'created_at': getattr(field, 'created_at', None),
+                    'updated_at': getattr(field, 'updated_at', None)
+                }
+                
+                # Add custom field options if they exist
+                if hasattr(field, 'custom_field_options'):
+                    options = getattr(field, 'custom_field_options', [])
+                    field_data['options'] = [
+                        {
+                            'id': getattr(option, 'id', None),
+                            'name': getattr(option, 'name', ''),
+                            'value': getattr(option, 'value', ''),
+                            'position': getattr(option, 'position', 0)
+                        }
+                        for option in options
+                    ]
+                
+                field_list.append(field_data)
+            
+            return {
+                'status': 'success',
+                'total_fields': len(field_list),
+                'user_fields': field_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get user fields: {str(e)}'
+            }
+
+    def get_organization_fields(self) -> Dict[str, Any]:
+        """Get all organization fields including custom fields"""
+        try:
+            org_fields = list(self.client.organization_fields())
+            
+            field_list = []
+            for field in org_fields:
+                field_data = {
+                    'id': getattr(field, 'id', None),
+                    'type': getattr(field, 'type', 'text'),
+                    'key': getattr(field, 'key', ''),
+                    'title': getattr(field, 'title', 'Untitled Field'),
+                    'description': getattr(field, 'description', ''),
+                    'position': getattr(field, 'position', 0),
+                    'active': getattr(field, 'active', True),
+                    'system': getattr(field, 'system', False),
+                    'regexp_for_validation': getattr(field, 'regexp_for_validation', None),
+                    'created_at': getattr(field, 'created_at', None),
+                    'updated_at': getattr(field, 'updated_at', None)
+                }
+                
+                # Add custom field options if they exist
+                if hasattr(field, 'custom_field_options'):
+                    options = getattr(field, 'custom_field_options', [])
+                    field_data['options'] = [
+                        {
+                            'id': getattr(option, 'id', None),
+                            'name': getattr(option, 'name', ''),
+                            'value': getattr(option, 'value', ''),
+                            'position': getattr(option, 'position', 0)
+                        }
+                        for option in options
+                    ]
+                
+                field_list.append(field_data)
+            
+            return {
+                'status': 'success',
+                'total_fields': len(field_list),
+                'organization_fields': field_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get organization fields: {str(e)}'
+            }
+
+    # =====================================
+    # ADVANCED SEARCH AND FILTERING
+    # =====================================
+    
+    def advanced_search(self, search_type: str, query: str, sort_by: str = None, sort_order: str = "desc") -> Dict[str, Any]:
+        """Advanced search across different object types"""
+        try:
+            # Build search query
+            if search_type not in ['tickets', 'users', 'organizations']:
+                return {
+                    'status': 'error',
+                    'message': f'Invalid search type: {search_type}. Must be one of: tickets, users, organizations'
+                }
+            
+            search_query = f"type:{search_type.rstrip('s')} {query}"
+            
+            # Perform search
+            search_results = list(self.client.search(query=search_query, sort_by=sort_by, sort_order=sort_order))
+            
+            # Format results based on type
+            formatted_results = []
+            for result in search_results[:100]:  # Limit to 100 results
+                if search_type == 'tickets':
+                    formatted_results.append({
+                        'id': getattr(result, 'id', None),
+                        'subject': getattr(result, 'subject', 'No Subject'),
+                        'status': getattr(result, 'status', 'unknown'),
+                        'priority': getattr(result, 'priority', 'normal'),
+                        'requester_id': getattr(result, 'requester_id', None),
+                        'assignee_id': getattr(result, 'assignee_id', None),
+                        'created_at': getattr(result, 'created_at', None),
+                        'updated_at': getattr(result, 'updated_at', None)
+                    })
+                elif search_type == 'users':
+                    formatted_results.append({
+                        'id': getattr(result, 'id', None),
+                        'name': getattr(result, 'name', 'Unnamed User'),
+                        'email': getattr(result, 'email', ''),
+                        'role': getattr(result, 'role', 'end-user'),
+                        'organization_id': getattr(result, 'organization_id', None),
+                        'active': getattr(result, 'active', True),
+                        'created_at': getattr(result, 'created_at', None)
+                    })
+                elif search_type == 'organizations':
+                    formatted_results.append({
+                        'id': getattr(result, 'id', None),
+                        'name': getattr(result, 'name', 'Unnamed Organization'),
+                        'external_id': getattr(result, 'external_id', None),
+                        'details': getattr(result, 'details', ''),
+                        'created_at': getattr(result, 'created_at', None)
+                    })
+            
+            return {
+                'status': 'success',
+                'search_type': search_type,
+                'query': search_query,
+                'total_results': len(formatted_results),
+                'results': formatted_results,
+                'sort_options': {
+                    'sort_by': sort_by,
+                    'sort_order': sort_order
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to perform advanced search: {str(e)}'
+            }
+
+    def export_search_results(self, query: str, object_type: str = "ticket") -> Dict[str, Any]:
+        """Export search results for bulk processing"""
+        try:
+            # Build search query
+            search_query = f"type:{object_type} {query}"
+            
+            # Perform search with larger limit for export
+            search_results = list(self.client.search(query=search_query))
+            
+            export_data = []
+            for result in search_results[:500]:  # Limit to 500 for export
+                if object_type == 'ticket':
+                    export_data.append({
+                        'id': getattr(result, 'id', None),
+                        'subject': getattr(result, 'subject', 'No Subject'),
+                        'description': getattr(result, 'description', ''),
+                        'status': getattr(result, 'status', 'unknown'),
+                        'priority': getattr(result, 'priority', 'normal'),
+                        'type': getattr(result, 'type', None),
+                        'requester_id': getattr(result, 'requester_id', None),
+                        'assignee_id': getattr(result, 'assignee_id', None),
+                        'group_id': getattr(result, 'group_id', None),
+                        'organization_id': getattr(result, 'organization_id', None),
+                        'tags': getattr(result, 'tags', []),
+                        'created_at': getattr(result, 'created_at', None),
+                        'updated_at': getattr(result, 'updated_at', None),
+                        'solved_at': getattr(result, 'solved_at', None)
+                    })
+                else:
+                    # Generic export for other types
+                    export_data.append({
+                        'id': getattr(result, 'id', None),
+                        'name': getattr(result, 'name', ''),
+                        'created_at': getattr(result, 'created_at', None),
+                        'updated_at': getattr(result, 'updated_at', None)
+                    })
+            
+            return {
+                'status': 'success',
+                'export_type': object_type,
+                'query': search_query,
+                'total_exported': len(export_data),
+                'export_timestamp': datetime.now().isoformat(),
+                'data': export_data
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to export search results: {str(e)}'
+            }
+
+    # =====================================
+    # AUTOMATION AND BUSINESS RULES
+    # =====================================
+    
+    def get_automations(self) -> Dict[str, Any]:
+        """Get all automations with their conditions and actions"""
+        try:
+            automations = list(self.client.automations())
+            
+            automation_list = []
+            for automation in automations:
+                automation_data = {
+                    'id': getattr(automation, 'id', None),
+                    'title': getattr(automation, 'title', 'Untitled Automation'),
+                    'active': getattr(automation, 'active', True),
+                    'position': getattr(automation, 'position', 0),
+                    'conditions': getattr(automation, 'conditions', {}),
+                    'actions': getattr(automation, 'actions', []),
+                    'created_at': getattr(automation, 'created_at', None),
+                    'updated_at': getattr(automation, 'updated_at', None)
+                }
+                automation_list.append(automation_data)
+            
+            return {
+                'status': 'success',
+                'total_automations': len(automation_list),
+                'automations': automation_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get automations: {str(e)}'
+            }
+
+    def get_triggers(self) -> Dict[str, Any]:
+        """Get all triggers with their conditions and actions"""
+        try:
+            triggers = list(self.client.triggers())
+            
+            trigger_list = []
+            for trigger in triggers:
+                trigger_data = {
+                    'id': getattr(trigger, 'id', None),
+                    'title': getattr(trigger, 'title', 'Untitled Trigger'),
+                    'active': getattr(trigger, 'active', True),
+                    'position': getattr(trigger, 'position', 0),
+                    'conditions': getattr(trigger, 'conditions', {}),
+                    'actions': getattr(trigger, 'actions', []),
+                    'category_id': getattr(trigger, 'category_id', None),
+                    'created_at': getattr(trigger, 'created_at', None),
+                    'updated_at': getattr(trigger, 'updated_at', None)
+                }
+                trigger_list.append(trigger_data)
+            
+            return {
+                'status': 'success',
+                'total_triggers': len(trigger_list),
+                'triggers': trigger_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get triggers: {str(e)}'
+            }
+
+    def get_sla_policies(self) -> Dict[str, Any]:
+        """Get all SLA policies and their configurations"""
+        try:
+            sla_policies = list(self.client.sla_policies())
+            
+            policy_list = []
+            for policy in sla_policies:
+                policy_data = {
+                    'id': getattr(policy, 'id', None),
+                    'title': getattr(policy, 'title', 'Untitled Policy'),
+                    'description': getattr(policy, 'description', ''),
+                    'position': getattr(policy, 'position', 0),
+                    'filter': getattr(policy, 'filter', {}),
+                    'policy_metrics': getattr(policy, 'policy_metrics', []),
+                    'created_at': getattr(policy, 'created_at', None),
+                    'updated_at': getattr(policy, 'updated_at', None)
+                }
+                policy_list.append(policy_data)
+            
+            return {
+                'status': 'success',
+                'total_policies': len(policy_list),
+                'sla_policies': policy_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get SLA policies: {str(e)}'
+            }
+
+    # =====================================
+    # KNOWLEDGE BASE INTEGRATION
+    # =====================================
+    
+    def search_help_center(self, query: str, locale: str = "en-us", category_id: int = None) -> Dict[str, Any]:
+        """Search help center articles"""
+        try:
+            # Build search parameters
+            search_params = {
+                'query': query,
+                'locale': locale
+            }
+            
+            if category_id:
+                search_params['category'] = category_id
+            
+            # Perform help center search
+            search_results = self.client.help_center.articles.search(search_params)
+            
+            article_list = []
+            for article in search_results['results'][:50]:  # Limit to 50
+                article_data = {
+                    'id': article.get('id'),
+                    'title': article.get('title', 'Untitled Article'),
+                    'body': article.get('body', '')[:200] + '...' if len(article.get('body', '')) > 200 else article.get('body', ''),
+                    'html_url': article.get('html_url', ''),
+                    'section_id': article.get('section_id'),
+                    'category_id': article.get('category_id'),
+                    'locale': article.get('locale', locale),
+                    'outdated': article.get('outdated', False),
+                    'draft': article.get('draft', False),
+                    'promoted': article.get('promoted', False),
+                    'vote_sum': article.get('vote_sum', 0),
+                    'vote_count': article.get('vote_count', 0),
+                    'created_at': article.get('created_at'),
+                    'updated_at': article.get('updated_at')
+                }
+                article_list.append(article_data)
+            
+            return {
+                'status': 'success',
+                'query': query,
+                'locale': locale,
+                'category_id': category_id,
+                'total_results': len(article_list),
+                'articles': article_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to search help center: {str(e)}'
+            }
+
+    def get_help_center_articles(self, section_id: int = None, category_id: int = None) -> Dict[str, Any]:
+        """Get help center articles"""
+        try:
+            articles = []
+            
+            if section_id:
+                # Get articles by section
+                articles = list(self.client.help_center.sections.articles(section_id))
+            elif category_id:
+                # Get articles by category (via sections)
+                sections = list(self.client.help_center.categories.sections(category_id))
+                for section in sections:
+                    section_articles = list(self.client.help_center.sections.articles(section.id))
+                    articles.extend(section_articles)
+            else:
+                # Get all articles (limited)
+                articles = list(self.client.help_center.articles())[:100]
+            
+            article_list = []
+            for article in articles:
+                article_data = {
+                    'id': getattr(article, 'id', None),
+                    'title': getattr(article, 'title', 'Untitled Article'),
+                    'body': getattr(article, 'body', '')[:200] + '...' if len(getattr(article, 'body', '')) > 200 else getattr(article, 'body', ''),
+                    'html_url': getattr(article, 'html_url', ''),
+                    'section_id': getattr(article, 'section_id', None),
+                    'locale': getattr(article, 'locale', 'en-us'),
+                    'outdated': getattr(article, 'outdated', False),
+                    'draft': getattr(article, 'draft', False),
+                    'promoted': getattr(article, 'promoted', False),
+                    'vote_sum': getattr(article, 'vote_sum', 0),
+                    'vote_count': getattr(article, 'vote_count', 0),
+                    'created_at': getattr(article, 'created_at', None),
+                    'updated_at': getattr(article, 'updated_at', None)
+                }
+                article_list.append(article_data)
+            
+            return {
+                'status': 'success',
+                'section_id': section_id,
+                'category_id': category_id,
+                'total_articles': len(article_list),
+                'articles': article_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get help center articles: {str(e)}'
+            }
+
+    # =====================================
+    # TICKET EVENTS AND AUDIT LOG
+    # =====================================
+    
+    def get_ticket_audits(self, ticket_id: int) -> Dict[str, Any]:
+        """Get all audit events for a ticket (complete change history)"""
+        try:
+            # Verify ticket exists
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get ticket audits
+            audits = list(self.client.tickets.audits(ticket_id))
+            
+            audit_list = []
+            for audit in audits:
+                audit_data = {
+                    'id': getattr(audit, 'id', None),
+                    'ticket_id': getattr(audit, 'ticket_id', ticket_id),
+                    'created_at': getattr(audit, 'created_at', None),
+                    'author_id': getattr(audit, 'author_id', None),
+                    'metadata': getattr(audit, 'metadata', {}),
+                    'events': []
+                }
+                
+                # Process audit events
+                events = getattr(audit, 'events', [])
+                for event in events:
+                    event_data = {
+                        'id': getattr(event, 'id', None),
+                        'type': getattr(event, 'type', 'unknown'),
+                        'field_name': getattr(event, 'field_name', None),
+                        'previous_value': getattr(event, 'previous_value', None),
+                        'value': getattr(event, 'value', None)
+                    }
+                    audit_data['events'].append(event_data)
+                
+                # Try to get author name
+                try:
+                    author = self.client.users(id=audit_data['author_id'])
+                    audit_data['author_name'] = getattr(author, 'name', 'Unknown')
+                except Exception:
+                    audit_data['author_name'] = 'Unknown'
+                
+                audit_list.append(audit_data)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'total_audits': len(audit_list),
+                'audits': audit_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get ticket audits: {str(e)}'
+            }
+
+    def get_ticket_events(self, ticket_id: int) -> Dict[str, Any]:
+        """Get all events for a ticket including system events"""
+        try:
+            # Get ticket audits (which contain events)
+            audit_result = self.get_ticket_audits(ticket_id)
+            
+            if audit_result['status'] == 'error':
+                return audit_result
+            
+            # Extract and flatten all events
+            all_events = []
+            for audit in audit_result['audits']:
+                for event in audit['events']:
+                    event_with_context = {
+                        'audit_id': audit['id'],
+                        'created_at': audit['created_at'],
+                        'author_id': audit['author_id'],
+                        'author_name': audit['author_name'],
+                        'event_id': event['id'],
+                        'event_type': event['type'],
+                        'field_name': event['field_name'],
+                        'previous_value': event['previous_value'],
+                        'current_value': event['value']
+                    }
+                    all_events.append(event_with_context)
+            
+            # Sort events by creation time
+            all_events.sort(key=lambda x: x['created_at'] or '', reverse=True)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'total_events': len(all_events),
+                'events': all_events
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get ticket events: {str(e)}'
+            }
+
+    # =====================================
+    # COLLABORATION FEATURES
+    # =====================================
+    
+    def add_ticket_collaborators(self, ticket_id: int, email_addresses: List[str]) -> Dict[str, Any]:
+        """Add collaborators (CC) to a ticket"""
+        try:
+            # Verify ticket exists
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get current collaborators
+            current_collaborators = getattr(ticket, 'collaborator_ids', [])
+            
+            # Find or create users for email addresses
+            added_collaborators = []
+            failed_collaborators = []
+            
+            for email in email_addresses:
+                try:
+                    # Search for existing user
+                    user_search = list(self.client.search(query=f"type:user email:{email}"))
+                    
+                    if user_search:
+                        user = user_search[0]
+                        user_id = getattr(user, 'id', None)
+                        if user_id not in current_collaborators:
+                            current_collaborators.append(user_id)
+                            added_collaborators.append({
+                                'email': email,
+                                'user_id': user_id,
+                                'name': getattr(user, 'name', 'Unknown'),
+                                'status': 'existing_user'
+                            })
+                    else:
+                        # Create new user
+                        new_user_data = {
+                            'name': email.split('@')[0],  # Use email prefix as name
+                            'email': email,
+                            'role': 'end-user'
+                        }
+                        new_user = self.client.users.create(new_user_data)
+                        user_id = getattr(new_user, 'id', None)
+                        
+                        if user_id:
+                            current_collaborators.append(user_id)
+                            added_collaborators.append({
+                                'email': email,
+                                'user_id': user_id,
+                                'name': getattr(new_user, 'name', 'Unknown'),
+                                'status': 'new_user_created'
+                            })
+                            
+                except Exception as e:
+                    failed_collaborators.append({
+                        'email': email,
+                        'error': str(e)
+                    })
+            
+            # Update ticket with new collaborators
+            if added_collaborators:
+                update_data = {'collaborator_ids': current_collaborators}
+                self.client.tickets.update(ticket_id, update_data)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'added_collaborators': added_collaborators,
+                'failed_collaborators': failed_collaborators,
+                'total_collaborators': len(current_collaborators)
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to add ticket collaborators: {str(e)}'
+            }
+
+    def get_ticket_collaborators(self, ticket_id: int) -> Dict[str, Any]:
+        """Get all collaborators on a ticket"""
+        try:
+            # Verify ticket exists
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            collaborator_ids = getattr(ticket, 'collaborator_ids', [])
+            
+            collaborator_list = []
+            for collaborator_id in collaborator_ids:
+                try:
+                    user = self.client.users(id=collaborator_id)
+                    collaborator_data = {
+                        'id': getattr(user, 'id', None),
+                        'name': getattr(user, 'name', 'Unknown'),
+                        'email': getattr(user, 'email', ''),
+                        'role': getattr(user, 'role', 'end-user'),
+                        'active': getattr(user, 'active', True),
+                        'organization_id': getattr(user, 'organization_id', None)
+                    }
+                    collaborator_list.append(collaborator_data)
+                except Exception:
+                    # Handle case where user might not exist
+                    collaborator_list.append({
+                        'id': collaborator_id,
+                        'name': 'Unknown User',
+                        'email': '',
+                        'role': 'unknown',
+                        'active': False,
+                        'organization_id': None
+                    })
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'total_collaborators': len(collaborator_list),
+                'collaborators': collaborator_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get ticket collaborators: {str(e)}'
+            }
+
+    def remove_ticket_collaborators(self, ticket_id: int, user_ids: List[int]) -> Dict[str, Any]:
+        """Remove collaborators from a ticket"""
+        try:
+            # Verify ticket exists
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get current collaborators and remove specified ones
+            current_collaborators = getattr(ticket, 'collaborator_ids', [])
+            removed_collaborators = []
+            
+            for user_id in user_ids:
+                if user_id in current_collaborators:
+                    current_collaborators.remove(user_id)
+                    removed_collaborators.append(user_id)
+            
+            # Update ticket
+            if removed_collaborators:
+                update_data = {'collaborator_ids': current_collaborators}
+                self.client.tickets.update(ticket_id, update_data)
+            
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'removed_collaborators': removed_collaborators,
+                'remaining_collaborators': len(current_collaborators)
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to remove ticket collaborators: {str(e)}'
+            }
+
+    # =====================================
+    # ADVANCED REPORTING
+    # =====================================
+    
+    def get_incremental_tickets(self, start_time: int, cursor: str = None) -> Dict[str, Any]:
+        """Get tickets incrementally for data synchronization"""
+        try:
+            # Use incremental export API
+            if cursor:
+                # Continue from cursor
+                result = self.client.incremental_tickets(start_time=start_time, cursor=cursor)
+            else:
+                # Start fresh
+                result = self.client.incremental_tickets(start_time=start_time)
+            
+            # Format tickets
+            ticket_list = []
+            for ticket in result.tickets:
+                ticket_data = {
+                    'id': getattr(ticket, 'id', None),
+                    'subject': getattr(ticket, 'subject', 'No Subject'),
+                    'description': getattr(ticket, 'description', ''),
+                    'status': getattr(ticket, 'status', 'unknown'),
+                    'priority': getattr(ticket, 'priority', 'normal'),
+                    'type': getattr(ticket, 'type', None),
+                    'requester_id': getattr(ticket, 'requester_id', None),
+                    'assignee_id': getattr(ticket, 'assignee_id', None),
+                    'group_id': getattr(ticket, 'group_id', None),
+                    'organization_id': getattr(ticket, 'organization_id', None),
+                    'tags': getattr(ticket, 'tags', []),
+                    'created_at': getattr(ticket, 'created_at', None),
+                    'updated_at': getattr(ticket, 'updated_at', None),
+                    'solved_at': getattr(ticket, 'solved_at', None)
+                }
+                ticket_list.append(ticket_data)
+            
+            return {
+                'status': 'success',
+                'start_time': start_time,
+                'end_time': getattr(result, 'end_time', None),
+                'next_page': getattr(result, 'next_page', None),
+                'count': len(ticket_list),
+                'tickets': ticket_list
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get incremental tickets: {str(e)}'
+            }
+
+    def get_ticket_metrics_detailed(self, ticket_id: int) -> Dict[str, Any]:
+        """Get detailed metrics for a specific ticket including SLA data"""
+        try:
+            # Get the ticket
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get ticket metrics
+            try:
+                metrics = self.client.ticket_metrics(ticket_id)
+            except Exception:
+                return {
+                    'status': 'error',
+                    'message': f'Metrics not available for ticket {ticket_id}'
+                }
+            
+            # Format metrics data
+            metrics_data = {
+                'ticket_id': ticket_id,
+                'ticket_subject': getattr(ticket, 'subject', 'No Subject'),
+                'ticket_status': getattr(ticket, 'status', 'unknown'),
+                'ticket_priority': getattr(ticket, 'priority', 'normal'),
+                'created_at': getattr(ticket, 'created_at', None),
+                'updated_at': getattr(ticket, 'updated_at', None),
+                'solved_at': getattr(ticket, 'solved_at', None),
+                'metrics': {
+                    'agent_wait_time_in_minutes': {},
+                    'assignee_stations': getattr(metrics, 'assignee_stations', 0),
+                    'assignee_updated_at': getattr(metrics, 'assignee_updated_at', None),
+                    'created_at': getattr(metrics, 'created_at', None),
+                    'first_resolution_time_in_minutes': {},
+                    'full_resolution_time_in_minutes': {},
+                    'group_stations': getattr(metrics, 'group_stations', 0),
+                    'initially_assigned_at': getattr(metrics, 'initially_assigned_at', None),
+                    'latest_comment_added_at': getattr(metrics, 'latest_comment_added_at', None),
+                    'on_hold_time_in_minutes': {},
+                    'reopens': getattr(metrics, 'reopens', 0),
+                    'replies': getattr(metrics, 'replies', 0),
+                    'reply_time_in_minutes': {},
+                    'requester_updated_at': getattr(metrics, 'requester_updated_at', None),
+                    'requester_wait_time_in_minutes': {},
+                    'solved_at': getattr(metrics, 'solved_at', None),
+                    'status_updated_at': getattr(metrics, 'status_updated_at', None),
+                    'updated_at': getattr(metrics, 'updated_at', None)
+                }
+            }
+            
+            # Extract time-based metrics
+            time_metrics = [
+                'agent_wait_time_in_minutes',
+                'first_resolution_time_in_minutes', 
+                'full_resolution_time_in_minutes',
+                'on_hold_time_in_minutes',
+                'reply_time_in_minutes',
+                'requester_wait_time_in_minutes'
+            ]
+            
+            for metric_name in time_metrics:
+                metric_obj = getattr(metrics, metric_name, None)
+                if metric_obj:
+                    metrics_data['metrics'][metric_name] = {
+                        'business_minutes': getattr(metric_obj, 'business_minutes', None),
+                        'calendar_minutes': getattr(metric_obj, 'calendar_minutes', None)
+                    }
+            
+            # Calculate additional derived metrics
+            created_at = getattr(ticket, 'created_at', None)
+            solved_at = getattr(ticket, 'solved_at', None)
+            
+            if created_at and solved_at:
+                from datetime import datetime
+                created = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                solved = datetime.fromisoformat(solved_at.replace('Z', '+00:00'))
+                total_resolution_hours = (solved - created).total_seconds() / 3600
+                metrics_data['derived_metrics'] = {
+                    'total_resolution_hours': round(total_resolution_hours, 2),
+                    'business_days': round(total_resolution_hours / 24, 2)
+                }
+            
+            return {
+                'status': 'success',
+                'data': metrics_data
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get detailed ticket metrics: {str(e)}'
+            }
+
+    def generate_agent_activity_report(self, agent_id: int, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Generate detailed activity report for an agent"""
+        try:
+            from datetime import datetime, timedelta
+            
+            # Verify agent exists
+            agent = self.client.users(id=agent_id)
+            if not agent:
+                return {
+                    'status': 'error',
+                    'message': f'Agent {agent_id} not found'
+                }
+            
+            # Build search queries for different activities
+            date_range = f"created>={start_date} created<={end_date}"
+            
+            activities = {}
+            
+            # Tickets created
+            try:
+                created_query = f"type:ticket assignee:{agent_id} {date_range}"
+                created_tickets = list(self.client.search(query=created_query))
+                activities['tickets_created'] = len(created_tickets)
+            except Exception:
+                activities['tickets_created'] = 0
+            
+            # Tickets solved
+            try:
+                solved_query = f"type:ticket assignee:{agent_id} status:solved updated>={start_date} updated<={end_date}"
+                solved_tickets = list(self.client.search(query=solved_query))
+                activities['tickets_solved'] = len(solved_tickets)
+            except Exception:
+                activities['tickets_solved'] = 0
+            
+            # Comments added (approximate via updated tickets)
+            try:
+                updated_query = f"type:ticket assignee:{agent_id} updated>={start_date} updated<={end_date}"
+                updated_tickets = list(self.client.search(query=updated_query))
+                activities['tickets_updated'] = len(updated_tickets)
+            except Exception:
+                activities['tickets_updated'] = 0
+            
+            # Calculate performance metrics
+            performance = {
+                'productivity_score': 0,
+                'resolution_rate': 0,
+                'activity_level': 'normal'
+            }
+            
+            if activities['tickets_created'] > 0:
+                performance['resolution_rate'] = round(
+                    (activities['tickets_solved'] / activities['tickets_created']) * 100, 2
+                )
+            
+            # Determine activity level
+            total_activity = activities['tickets_created'] + activities['tickets_solved'] + activities['tickets_updated']
+            if total_activity > 50:
+                performance['activity_level'] = 'high'
+            elif total_activity < 10:
+                performance['activity_level'] = 'low'
+            
+            performance['productivity_score'] = min(100, total_activity * 2)
+            
+            # Get ticket details for analysis
+            ticket_analysis = {
+                'by_status': {},
+                'by_priority': {},
+                'by_type': {},
+                'response_times': []
+            }
+            
+            for ticket in created_tickets[:50]:  # Analyze up to 50 tickets
+                status = getattr(ticket, 'status', 'unknown')
+                priority = getattr(ticket, 'priority', 'normal')
+                ticket_type = getattr(ticket, 'type', 'incident')
+                
+                ticket_analysis['by_status'][status] = ticket_analysis['by_status'].get(status, 0) + 1
+                ticket_analysis['by_priority'][priority] = ticket_analysis['by_priority'].get(priority, 0) + 1
+                ticket_analysis['by_type'][ticket_type] = ticket_analysis['by_type'].get(ticket_type, 0) + 1
+            
+            return {
+                'status': 'success',
+                'agent': {
+                    'id': agent_id,
+                    'name': getattr(agent, 'name', 'Unknown Agent'),
+                    'email': getattr(agent, 'email', ''),
+                    'role': getattr(agent, 'role', 'agent')
+                },
+                'report_period': {
+                    'start_date': start_date,
+                    'end_date': end_date
+                },
+                'activities': activities,
+                'performance': performance,
+                'ticket_analysis': ticket_analysis,
+                'report_generated_at': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to generate agent activity report: {str(e)}'
+            }
