@@ -1100,6 +1100,11 @@ async def handle_list_tools() -> list[types.Tool]:
 
         # KNOWLEDGE BASE INTEGRATION
         types.Tool(
+            name="check_help_center_status",
+            description="Check if Help Center is available and accessible (diagnostic tool).",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        types.Tool(
             name="search_help_center",
             description="Search help center articles.",
             inputSchema={
@@ -1877,6 +1882,13 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(sla_policies, indent=2)
+            )]
+
+        elif name == "check_help_center_status":
+            status = zendesk_client.check_help_center_status()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(status, indent=2)
             )]
 
         elif name == "search_help_center":

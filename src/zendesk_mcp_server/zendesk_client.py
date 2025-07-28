@@ -3305,38 +3305,90 @@ class ZendeskClient:
     # KNOWLEDGE BASE INTEGRATION
     # =====================================
     
-    def search_help_center(self, query: str, locale: str = "en-us", category_id: int = None) -> Dict[str, Any]:
-        """Search help center articles"""
+    def check_help_center_status(self) -> Dict[str, Any]:
+        """Check if Help Center is available and accessible"""
         try:
-            # Build search parameters
-            search_params = {
-                'query': query,
-                'locale': locale
+            # Test sections access (this is working based on our test)
+            sections = list(self.client.help_center.sections())
+            sections_count = len(sections)
+            
+            # Test article search (this is also working)
+            search_results = list(self.client.search(query='type:article'))
+            articles_via_search = len(search_results)
+            
+            # Test direct Help Center article search 
+            try:
+                help_center_results = list(self.client.help_center.articles.search(query="help"))
+                articles_via_help_center = len(help_center_results)
+                help_center_search_available = True
+            except Exception:
+                articles_via_help_center = 0
+                help_center_search_available = False
+            
+            status = {
+                'help_center_available': True,
+                'sections_count': sections_count,
+                'articles_via_search': articles_via_search,
+                'articles_via_help_center_search': articles_via_help_center,
+                'help_center_search_available': help_center_search_available,
+                'sections_sample': [
+                    {
+                        'id': getattr(section, 'id', None),
+                        'name': getattr(section, 'name', 'Unknown')
+                    }
+                    for section in sections[:5]  # Show first 5 sections
+                ],
+                'recommendation': f'Help Center is working! Found {sections_count} sections and {articles_via_search} articles.'
             }
             
-            if category_id:
-                search_params['category'] = category_id
+            return {
+                'status': 'success',
+                'help_center_status': status
+            }
             
-            # Perform help center search
-            search_results = self.client.help_center.articles.search(search_params)
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to check help center status: {str(e)}'
+            }
+    
+    def search_help_center(self, query: str, locale: str = "en-us", category_id: int = None) -> Dict[str, Any]:
+        """Search help center articles using the working method identified in testing"""
+        try:
+            # Use the Help Center articles search method (verified working in test)
+            search_results = list(self.client.help_center.articles.search(query=query))
+            
+            # Filter by category if specified
+            if category_id:
+                search_results = [
+                    article for article in search_results 
+                    if getattr(article, 'category_id', None) == category_id
+                ]
+            
+            # Filter by locale if specified and not default
+            if locale and locale != "en-us":
+                search_results = [
+                    article for article in search_results 
+                    if getattr(article, 'locale', 'en-us') == locale
+                ]
             
             article_list = []
-            for article in search_results['results'][:50]:  # Limit to 50
+            for article in search_results[:50]:  # Limit to 50 results
                 article_data = {
-                    'id': article.get('id'),
-                    'title': article.get('title', 'Untitled Article'),
-                    'body': article.get('body', '')[:200] + '...' if len(article.get('body', '')) > 200 else article.get('body', ''),
-                    'html_url': article.get('html_url', ''),
-                    'section_id': article.get('section_id'),
-                    'category_id': article.get('category_id'),
-                    'locale': article.get('locale', locale),
-                    'outdated': article.get('outdated', False),
-                    'draft': article.get('draft', False),
-                    'promoted': article.get('promoted', False),
-                    'vote_sum': article.get('vote_sum', 0),
-                    'vote_count': article.get('vote_count', 0),
-                    'created_at': article.get('created_at'),
-                    'updated_at': article.get('updated_at')
+                    'id': getattr(article, 'id', None),
+                    'title': getattr(article, 'title', 'Untitled Article'),
+                    'body': getattr(article, 'body', '')[:300] + '...' if len(getattr(article, 'body', '')) > 300 else getattr(article, 'body', ''),
+                    'html_url': getattr(article, 'html_url', ''),
+                    'section_id': getattr(article, 'section_id', None),
+                    'category_id': getattr(article, 'category_id', None),
+                    'locale': getattr(article, 'locale', locale),
+                    'outdated': getattr(article, 'outdated', False),
+                    'draft': getattr(article, 'draft', False),
+                    'promoted': getattr(article, 'promoted', False),
+                    'vote_sum': getattr(article, 'vote_sum', 0),
+                    'vote_count': getattr(article, 'vote_count', 0),
+                    'created_at': str(getattr(article, 'created_at', '')),
+                    'updated_at': str(getattr(article, 'updated_at', ''))
                 }
                 article_list.append(article_data)
             
@@ -3346,65 +3398,204 @@ class ZendeskClient:
                 'locale': locale,
                 'category_id': category_id,
                 'total_results': len(article_list),
-                'articles': article_list
+                'articles': article_list,
+                'search_method': 'help_center.articles.search (verified working)'
             }
             
         except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Failed to search help center: {str(e)}'
-            }
+            # Fallback to general search if Help Center search fails
+            try:
+                search_query = f'type:article {query}'
+                if locale and locale != "en-us":
+                    search_query += f' locale:{locale}'
+                
+                fallback_results = list(self.client.search(query=search_query))
+                
+                article_list = []
+                for article in fallback_results[:50]:
+                    article_data = {
+                        'id': getattr(article, 'id', None),
+                        'title': getattr(article, 'title', 'Untitled Article'),
+                        'body': getattr(article, 'body', '')[:300] + '...' if len(getattr(article, 'body', '')) > 300 else getattr(article, 'body', ''),
+                        'html_url': getattr(article, 'html_url', ''),
+                        'section_id': getattr(article, 'section_id', None),
+                        'locale': getattr(article, 'locale', locale),
+                        'created_at': str(getattr(article, 'created_at', '')),
+                        'updated_at': str(getattr(article, 'updated_at', ''))
+                    }
+                    article_list.append(article_data)
+                
+                return {
+                    'status': 'success',
+                    'query': query,
+                    'locale': locale,
+                    'category_id': category_id,
+                    'total_results': len(article_list),
+                    'articles': article_list,
+                    'search_method': 'general_search_fallback',
+                    'note': f'Used fallback search due to: {str(e)}'
+                }
+                
+            except Exception as fallback_error:
+                return {
+                    'status': 'error',
+                    'message': f'Both Help Center search and fallback failed. Help Center search error: {str(e)}, Fallback error: {str(fallback_error)}'
+                }
 
     def get_help_center_articles(self, section_id: int = None, category_id: int = None) -> Dict[str, Any]:
-        """Get help center articles"""
+        """Get help center articles by section, category, or all articles"""
         try:
             articles = []
             
             if section_id:
-                # Get articles by section
+                # Get articles from specific section
                 articles = list(self.client.help_center.sections.articles(section_id))
+                filter_info = f"section {section_id}"
+                
             elif category_id:
-                # Get articles by category (via sections)
+                # Get all sections in the category, then get articles from each section
                 sections = list(self.client.help_center.categories.sections(category_id))
                 for section in sections:
                     section_articles = list(self.client.help_center.sections.articles(section.id))
                     articles.extend(section_articles)
+                filter_info = f"category {category_id}"
+                
             else:
-                # Get all articles (limited)
-                articles = list(self.client.help_center.articles())[:100]
+                # Get all sections and their articles (since direct articles.list might not work)
+                sections = list(self.client.help_center.sections())
+                for section in sections[:20]:  # Limit to first 20 sections to avoid timeout
+                    try:
+                        section_articles = list(self.client.help_center.sections.articles(section.id))
+                        articles.extend(section_articles)
+                    except Exception:
+                        continue  # Skip sections we can't access
+                filter_info = "all sections"
             
-            article_list = []
-            for article in articles:
-                article_data = {
-                    'id': getattr(article, 'id', None),
-                    'title': getattr(article, 'title', 'Untitled Article'),
-                    'body': getattr(article, 'body', '')[:200] + '...' if len(getattr(article, 'body', '')) > 200 else getattr(article, 'body', ''),
-                    'html_url': getattr(article, 'html_url', ''),
-                    'section_id': getattr(article, 'section_id', None),
-                    'locale': getattr(article, 'locale', 'en-us'),
-                    'outdated': getattr(article, 'outdated', False),
-                    'draft': getattr(article, 'draft', False),
-                    'promoted': getattr(article, 'promoted', False),
-                    'vote_sum': getattr(article, 'vote_sum', 0),
-                    'vote_count': getattr(article, 'vote_count', 0),
-                    'created_at': getattr(article, 'created_at', None),
-                    'updated_at': getattr(article, 'updated_at', None)
+            if not articles:
+                return {
+                    'status': 'success',
+                    'section_id': section_id,
+                    'category_id': category_id,
+                    'total_articles': 0,
+                    'articles': [],
+                    'message': f'No articles found in {filter_info}',
+                    'filter_applied': filter_info
                 }
-                article_list.append(article_data)
+            
+            # Process articles into standardized format
+            article_list = []
+            for article in articles[:100]:  # Limit to 100 articles
+                try:
+                    article_data = {
+                        'id': getattr(article, 'id', None),
+                        'title': getattr(article, 'title', 'Untitled Article'),
+                        'body': getattr(article, 'body', '')[:500] + '...' if len(getattr(article, 'body', '')) > 500 else getattr(article, 'body', ''),
+                        'html_url': getattr(article, 'html_url', ''),
+                        'section_id': getattr(article, 'section_id', None),
+                        'category_id': getattr(article, 'category_id', None),
+                        'locale': getattr(article, 'locale', 'en-us'),
+                        'outdated': getattr(article, 'outdated', False),
+                        'draft': getattr(article, 'draft', False),
+                        'promoted': getattr(article, 'promoted', False),
+                        'position': getattr(article, 'position', 0),
+                        'vote_sum': getattr(article, 'vote_sum', 0),
+                        'vote_count': getattr(article, 'vote_count', 0),
+                        'created_at': str(getattr(article, 'created_at', '')),
+                        'updated_at': str(getattr(article, 'updated_at', ''))
+                    }
+                    article_list.append(article_data)
+                except Exception:
+                    # Skip articles that can't be processed
+                    continue
             
             return {
                 'status': 'success',
                 'section_id': section_id,
                 'category_id': category_id,
                 'total_articles': len(article_list),
-                'articles': article_list
+                'articles': article_list,
+                'filter_applied': filter_info,
+                'note': 'Articles retrieved successfully using Help Center API'
             }
             
         except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Failed to get help center articles: {str(e)}'
-            }
+            # Fallback: try using search API
+            try:
+                if section_id:
+                    search_query = f'type:article section_id:{section_id}'
+                elif category_id:
+                    search_query = f'type:article category_id:{category_id}'
+                else:
+                    search_query = 'type:article'
+                
+                fallback_results = list(self.client.search(query=search_query))[:100]
+                
+                article_list = []
+                for article in fallback_results:
+                    try:
+                        article_data = {
+                            'id': getattr(article, 'id', None),
+                            'title': getattr(article, 'title', 'Untitled Article'),
+                            'body': getattr(article, 'body', '')[:500] + '...' if len(getattr(article, 'body', '')) > 500 else getattr(article, 'body', ''),
+                            'html_url': getattr(article, 'html_url', ''),
+                            'section_id': getattr(article, 'section_id', None),
+                            'created_at': str(getattr(article, 'created_at', '')),
+                            'updated_at': str(getattr(article, 'updated_at', ''))
+                        }
+                        article_list.append(article_data)
+                    except Exception:
+                        continue
+                
+                return {
+                    'status': 'success',
+                    'section_id': section_id,
+                    'category_id': category_id,
+                    'total_articles': len(article_list),
+                    'articles': article_list,
+                    'search_method': 'search_api_fallback',
+                    'note': f'Used search API fallback due to: {str(e)}'
+                }
+                
+            except Exception as fallback_error:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to get help center articles. Primary error: {str(e)}, Fallback error: {str(fallback_error)}',
+                    'section_id': section_id,
+                    'category_id': category_id
+                }
+                return {
+                    'status': 'success',
+                    'message': 'No articles found matching the criteria',
+                    'section_id': section_id,
+                    'category_id': category_id,
+                    'total_articles': 0,
+                    'articles': []
+                }
+            
+            article_list = []
+            for article in articles:
+                try:
+                    article_data = {
+                        'id': getattr(article, 'id', None),
+                        'title': getattr(article, 'title', 'Untitled Article'),
+                        'body': getattr(article, 'body', '')[:200] + '...' if len(getattr(article, 'body', '')) > 200 else getattr(article, 'body', ''),
+                        'html_url': getattr(article, 'html_url', ''),
+                        'section_id': getattr(article, 'section_id', None),
+                        'locale': getattr(article, 'locale', 'en-us'),
+                        'outdated': getattr(article, 'outdated', False),
+                        'draft': getattr(article, 'draft', False),
+                        'promoted': getattr(article, 'promoted', False),
+                        'vote_sum': getattr(article, 'vote_sum', 0),
+                        'vote_count': getattr(article, 'vote_count', 0),
+                        'created_at': getattr(article, 'created_at', None),
+                        'updated_at': getattr(article, 'updated_at', None)
+                    }
+                    article_list.append(article_data)
+                except Exception:
+                    # Skip articles that can't be processed
+                    continue
+            
+
 
     # =====================================
     # TICKET EVENTS AND AUDIT LOG

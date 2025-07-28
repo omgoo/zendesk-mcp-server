@@ -619,6 +619,13 @@ Arguments: {}
 
 ## 📚 **Knowledge Base Integration**
 
+### Check Help Center Status (Diagnostic)
+```
+Request: check_help_center_status
+Arguments: {}
+```
+**Use Case**: Troubleshooting - diagnose Help Center availability and configuration issues before searching for articles.
+
 ### Search Help Center Articles
 ```
 Request: search_help_center
@@ -657,6 +664,13 @@ Arguments: {
 }
 ```
 **Use Case**: Content audit - get all articles in category for content review and updates.
+
+### Get All Available Articles
+```
+Request: get_help_center_articles
+Arguments: {}
+```
+**Use Case**: Complete audit - list all published articles for content management and organization.
 
 ## 🔍 **Audit and Compliance**
 
