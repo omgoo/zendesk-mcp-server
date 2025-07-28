@@ -3308,37 +3308,43 @@ class ZendeskClient:
     def check_help_center_status(self) -> Dict[str, Any]:
         """Check if Help Center is available and accessible"""
         try:
-            # Test sections access (this is working based on our test)
+            # Test sections access
             sections = list(self.client.help_center.sections())
             sections_count = len(sections)
             
-            # Test article search (this is also working)
-            search_results = list(self.client.search(query='type:article'))
-            articles_via_search = len(search_results)
+            # Test direct Help Center article search (this is working)
+            help_center_results = list(self.client.help_center.articles.search(query="help"))
+            articles_via_help_center = len(help_center_results)
             
-            # Test direct Help Center article search 
-            try:
-                help_center_results = list(self.client.help_center.articles.search(query="help"))
-                articles_via_help_center = len(help_center_results)
-                help_center_search_available = True
-            except Exception:
-                articles_via_help_center = 0
-                help_center_search_available = False
+            # Get a quick sample of articles from the first few sections
+            article_sample_count = 0
+            sections_with_articles = 0
+            
+            for section in sections[:10]:  # Check first 10 sections
+                try:
+                    section_articles = list(self.client.help_center.sections.articles(section.id))
+                    if len(section_articles) > 0:
+                        sections_with_articles += 1
+                        article_sample_count += len(section_articles)
+                except Exception:
+                    continue
             
             status = {
                 'help_center_available': True,
                 'sections_count': sections_count,
-                'articles_via_search': articles_via_search,
-                'articles_via_help_center_search': articles_via_help_center,
-                'help_center_search_available': help_center_search_available,
+                'sections_with_articles': sections_with_articles,
+                'sample_articles_count': article_sample_count,
+                'search_working': articles_via_help_center > 0,
+                'articles_found_via_search': articles_via_help_center,
                 'sections_sample': [
                     {
                         'id': getattr(section, 'id', None),
-                        'name': getattr(section, 'name', 'Unknown')
+                        'name': getattr(section, 'name', 'Unknown'),
+                        'description': getattr(section, 'description', '')[:100] + '...' if len(getattr(section, 'description', '')) > 100 else getattr(section, 'description', '')
                     }
                     for section in sections[:5]  # Show first 5 sections
                 ],
-                'recommendation': f'Help Center is working! Found {sections_count} sections and {articles_via_search} articles.'
+                'recommendation': f'Help Center is working! Found {sections_count} sections, {sections_with_articles} sections contain articles, and search found {articles_via_help_center} results.'
             }
             
             return {
@@ -3461,15 +3467,41 @@ class ZendeskClient:
                 filter_info = f"category {category_id}"
                 
             else:
-                # Get all sections and their articles (since direct articles.list might not work)
-                sections = list(self.client.help_center.sections())
-                for section in sections[:20]:  # Limit to first 20 sections to avoid timeout
-                    try:
-                        section_articles = list(self.client.help_center.sections.articles(section.id))
-                        articles.extend(section_articles)
-                    except Exception:
-                        continue  # Skip sections we can't access
-                filter_info = "all sections"
+                # Get all articles using search (more reliable than sections)
+                # Since sections might be empty but articles exist
+                try:
+                    # Use broad search queries to get most articles
+                    search_queries = ["help", "how", "the", "a", "to", "and"]
+                    all_articles = []
+                    article_ids_seen = set()
+                    
+                    for search_query in search_queries:
+                        try:
+                            search_results = list(self.client.help_center.articles.search(query=search_query))
+                            for article in search_results:
+                                article_id = getattr(article, 'id', None)
+                                if article_id and article_id not in article_ids_seen:
+                                    all_articles.append(article)
+                                    article_ids_seen.add(article_id)
+                            
+                            # Stop if we have enough articles
+                            if len(all_articles) >= 100:
+                                break
+                        except Exception:
+                            continue
+                    
+                    articles = all_articles[:100]  # Limit to 100 articles
+                    filter_info = f"all articles via search (found {len(articles)} unique articles)"
+                except Exception:
+                    # Fallback: try getting from sections
+                    sections = list(self.client.help_center.sections())
+                    for section in sections[:20]:  # Limit to first 20 sections to avoid timeout
+                        try:
+                            section_articles = list(self.client.help_center.sections.articles(section.id))
+                            articles.extend(section_articles)
+                        except Exception:
+                            continue  # Skip sections we can't access
+                    filter_info = "all sections (fallback)"
             
             if not articles:
                 return {
