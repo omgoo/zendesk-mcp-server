@@ -453,6 +453,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["user_id"]
             }
         ),
+        # ENTERPRISE PERFORMANCE ANALYTICS TOOLS
         types.Tool(
             name="get_agent_performance_metrics",
             description="Get comprehensive agent performance metrics including response times, resolution rates, and satisfaction scores.",
@@ -517,6 +518,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["agent_id"]
             }
         ),
+        # WORKLOAD MANAGEMENT TOOLS
         types.Tool(
             name="get_agent_workload_analysis",
             description="Analyze current workload distribution across agents with capacity utilization and imbalance alerts.",
@@ -549,6 +551,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 }
             }
         ),
+        # SLA MONITORING TOOLS
         types.Tool(
             name="get_sla_compliance_report",
             description="Generate comprehensive SLA compliance report with first response and resolution time analysis by priority.",
@@ -584,6 +587,89 @@ async def handle_list_tools() -> list[types.Tool]:
                         "maximum": 168
                     }
                 }
+            }
+        ),
+        # ADVANCED AUTOMATION TOOLS
+        types.Tool(
+            name="bulk_update_tickets",
+            description="Perform bulk updates on multiple tickets including status, priority, tags, and assignment changes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of ticket IDs to update (max 100)",
+                        "maxItems": 100
+                    },
+                    "updates": {
+                        "type": "object",
+                        "description": "Updates to apply to all tickets",
+                        "properties": {
+                            "status": {"type": "string"},
+                            "priority": {"type": "string"},
+                            "assignee_id": {"type": "integer"},
+                            "group_id": {"type": "integer"},
+                            "tags": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {"enum": ["add", "remove", "set"]},
+                                    "values": {"type": "array", "items": {"type": "string"}}
+                                }
+                            }
+                        }
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for the bulk update (optional but recommended)"
+                    }
+                },
+                "required": ["ticket_ids", "updates"]
+            }
+        ),
+        types.Tool(
+            name="auto_categorize_tickets",
+            description="Automatically categorize and tag tickets based on content analysis and machine learning.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Specific ticket IDs to categorize (optional - if not provided, uses recent untagged tickets)"
+                    },
+                    "use_ml": {
+                        "type": "boolean",
+                        "description": "Enable machine learning-based categorization (default: true)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="escalate_ticket",
+            description="Escalate ticket to appropriate level with automatic notifications and tracking.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to escalate"
+                    },
+                    "escalation_level": {
+                        "type": "string",
+                        "description": "Level of escalation",
+                        "enum": ["manager", "senior_agent", "external"]
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for escalation"
+                    },
+                    "notify_stakeholders": {
+                        "type": "boolean",
+                        "description": "Send notifications to relevant stakeholders (default: true)"
+                    }
+                },
+                "required": ["ticket_id", "escalation_level", "reason"]
             }
         )
     ]
@@ -857,6 +943,55 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(at_risk_tickets, indent=2)
+            )]
+
+        elif name == "bulk_update_tickets":
+            if not arguments or "ticket_ids" not in arguments or "updates" not in arguments:
+                raise ValueError("Missing required arguments: ticket_ids and updates")
+            ticket_ids = arguments["ticket_ids"]
+            updates = arguments["updates"]
+            reason = arguments.get("reason")
+            
+            results = zendesk_client.bulk_update_tickets(
+                ticket_ids=ticket_ids,
+                updates=updates,
+                reason=reason
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "auto_categorize_tickets":
+            ticket_ids = arguments.get("ticket_ids") if arguments else None
+            use_ml = arguments.get("use_ml", True) if arguments else True
+            
+            categorized_tickets = zendesk_client.auto_categorize_tickets(
+                ticket_ids=ticket_ids,
+                use_ml=use_ml
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(categorized_tickets, indent=2)
+            )]
+
+        elif name == "escalate_ticket":
+            if not arguments or "ticket_id" not in arguments or "escalation_level" not in arguments or "reason" not in arguments:
+                raise ValueError("Missing required arguments: ticket_id, escalation_level, and reason")
+            ticket_id = arguments["ticket_id"]
+            escalation_level = arguments["escalation_level"]
+            reason = arguments["reason"]
+            notify_stakeholders = arguments.get("notify_stakeholders", True) if arguments else True
+            
+            escalated_ticket = zendesk_client.escalate_ticket(
+                ticket_id=ticket_id,
+                escalation_level=escalation_level,
+                reason=reason,
+                notify_stakeholders=notify_stakeholders
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(escalated_ticket, indent=2)
             )]
 
         else:
