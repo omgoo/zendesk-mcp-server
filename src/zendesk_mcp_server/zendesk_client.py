@@ -77,50 +77,70 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to post comment on ticket {ticket_id}: {str(e)}")
 
-    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc") -> List[Dict[str, Any]]:
+    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = False) -> List[Dict[str, Any]]:
         """
-        Search for tickets using Zendesk's search API.
+        Search for tickets using the Zendesk Search API.
         
         Args:
-            query: Search query (e.g., "type:ticket status:open", "priority:urgent", etc.)
+            query: Search query string
             sort_by: Field to sort by (created_at, updated_at, priority, status, etc.)
             sort_order: Sort order (asc or desc)
+            compact: If True, returns minimal data without descriptions and comments for better performance
         """
         try:
-            # Ensure we're searching for tickets if not specified
-            if "type:" not in query:
+            # Ensure the query includes type:ticket if not already specified
+            if "type:ticket" not in query:
                 query = f"type:ticket {query}"
             
-            search_results = self.client.search(query=query, sort_by=sort_by, sort_order=sort_order)
+            search_results = self.client.search(
+                query=query,
+                sort_by=sort_by,
+                sort_order=sort_order
+            )
             
             tickets = []
-            for result in search_results:
-                if hasattr(result, 'id'):  # Ensure it's a ticket object
-                    tickets.append({
-                        'id': result.id,
-                        'subject': getattr(result, 'subject', ''),
-                        'description': getattr(result, 'description', ''),
-                        'status': getattr(result, 'status', ''),
-                        'priority': getattr(result, 'priority', ''),
-                        'created_at': str(getattr(result, 'created_at', '')),
-                        'updated_at': str(getattr(result, 'updated_at', '')),
-                        'requester_id': getattr(result, 'requester_id', None),
-                        'assignee_id': getattr(result, 'assignee_id', None),
-                        'organization_id': getattr(result, 'organization_id', None),
-                        'tags': getattr(result, 'tags', [])
-                    })
-            
+            for ticket in search_results:
+                ticket_data = {
+                    "id": getattr(ticket, 'id', None),
+                    "subject": getattr(ticket, 'subject', 'No subject'),
+                    "status": getattr(ticket, 'status', None),
+                    "priority": getattr(ticket, 'priority', None),
+                    "created_at": getattr(ticket, 'created_at', None),
+                    "updated_at": getattr(ticket, 'updated_at', None),
+                    "requester_id": getattr(ticket, 'requester_id', None),
+                    "assignee_id": getattr(ticket, 'assignee_id', None),
+                    "organization_id": getattr(ticket, 'organization_id', None),
+                    "tags": getattr(ticket, 'tags', [])
+                }
+                
+                # Only include verbose fields if not in compact mode
+                if not compact:
+                    description = getattr(ticket, 'description', '')
+                    # Truncate very long descriptions
+                    if len(description) > 500:
+                        description = description[:497] + "..."
+                    ticket_data["description"] = description
+                else:
+                    # In compact mode, truncate subject if very long
+                    subject = ticket_data["subject"]
+                    if len(subject) > 100:
+                        ticket_data["subject"] = subject[:97] + "..."
+                
+                tickets.append(ticket_data)
+                
             return tickets
+            
         except Exception as e:
+            # Improve error messaging for different types of failures
             error_msg = str(e)
-            if "SSL" in error_msg or "certificate" in error_msg.lower():
-                raise Exception(f"SSL/Connection error accessing {self.subdomain}.zendesk.com. Please check your Zendesk subdomain and network connection. Original error: {error_msg}")
-            elif "401" in error_msg or "unauthorized" in error_msg.lower():
-                raise Exception(f"Authentication failed. Please check your Zendesk email and API token. Original error: {error_msg}")
-            elif "403" in error_msg or "forbidden" in error_msg.lower():
+            if "SSL" in error_msg or "ssl" in error_msg.lower():
+                raise Exception(f"SSL connection error. Check your ZENDESK_SUBDOMAIN setting. Original error: {error_msg}")
+            elif "401" in error_msg or "authentication" in error_msg.lower():
+                raise Exception(f"Authentication failed. Check your ZENDESK_EMAIL and ZENDESK_API_KEY. Original error: {error_msg}")
+            elif "403" in error_msg or "permission" in error_msg.lower():
                 raise Exception(f"Permission denied. Your API token may not have search permissions. Original error: {error_msg}")
             else:
-                raise Exception(f"Failed to search tickets with query '{query}': {error_msg}")
+                raise Exception(f"Search failed: {error_msg}")
 
     def get_ticket_counts(self) -> Dict[str, Any]:
         """
@@ -356,3 +376,154 @@ class ZendeskClient:
             return kb
         except Exception as e:
             raise Exception(f"Failed to fetch knowledge base: {str(e)}")
+
+    def get_user_by_id(self, user_id: int) -> Dict[str, Any]:
+        """
+        Get user information by user ID.
+        Returns user details including name, email, role, etc.
+        """
+        try:
+            user = self.client.users(id=user_id)
+            
+            return {
+                'id': getattr(user, 'id', user_id),
+                'name': getattr(user, 'name', 'Unknown'),
+                'email': getattr(user, 'email', 'Unknown'),
+                'role': getattr(user, 'role', 'Unknown'),
+                'active': getattr(user, 'active', True),
+                'created_at': getattr(user, 'created_at', None),
+                'last_login_at': getattr(user, 'last_login_at', None),
+                'time_zone': getattr(user, 'time_zone', None),
+                'locale': getattr(user, 'locale', None),
+                'organization_id': getattr(user, 'organization_id', None)
+            }
+        except Exception as e:
+            # Try searching for the user as backup
+            try:
+                search_results = self.client.search(query=f"type:user id:{user_id}")
+                user_results = list(search_results)
+                if user_results:
+                    user = user_results[0]
+                    return {
+                        'id': getattr(user, 'id', user_id),
+                        'name': getattr(user, 'name', f"User {user_id}"),
+                        'email': getattr(user, 'email', 'Unknown'),
+                        'role': getattr(user, 'role', 'Unknown'),
+                        'active': getattr(user, 'active', True),
+                        'created_at': getattr(user, 'created_at', None),
+                        'last_login_at': getattr(user, 'last_login_at', None),
+                        'time_zone': getattr(user, 'time_zone', None),
+                        'locale': getattr(user, 'locale', None),
+                        'organization_id': getattr(user, 'organization_id', None)
+                    }
+                else:
+                    raise Exception(f"User {user_id} not found")
+            except Exception:
+                raise Exception(f"Failed to get user {user_id}: {str(e)}")
+
+    def get_agent_performance(self, days: int = 7) -> Dict[str, Any]:
+        """
+        Get agent performance metrics for the specified number of days.
+        Returns minimal data focused on performance metrics.
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Calculate date range
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            
+            # Search for tickets updated/solved in the time period
+            query = f"updated>{start_date_str} status:solved"
+            search_results = self.client.search(query=query)
+            
+            # Convert to list to work with the data
+            tickets = list(search_results)
+            
+            # Extract minimal data for analysis
+            agent_stats = {}
+            
+            for ticket in tickets:
+                assignee_id = getattr(ticket, 'assignee_id', None)
+                if not assignee_id:
+                    continue
+                    
+                if assignee_id not in agent_stats:
+                    agent_stats[assignee_id] = {
+                        'assignee_id': assignee_id,
+                        'tickets_solved': 0,
+                        'total_priority_score': 0,
+                        'ticket_ids': [],
+                        'subjects': []  # Keep only subjects for context
+                    }
+                
+                agent_stats[assignee_id]['tickets_solved'] += 1
+                agent_stats[assignee_id]['ticket_ids'].append(getattr(ticket, 'id', None))
+                
+                # Add subject but truncate if too long
+                subject = getattr(ticket, 'subject', 'No subject')
+                if len(subject) > 80:
+                    subject = subject[:77] + "..."
+                agent_stats[assignee_id]['subjects'].append(subject)
+                
+                # Calculate priority score (urgent=4, high=3, normal=2, low=1)
+                priority = getattr(ticket, 'priority', 'normal')
+                priority_scores = {'urgent': 4, 'high': 3, 'normal': 2, 'low': 1}
+                agent_stats[assignee_id]['total_priority_score'] += priority_scores.get(priority, 2)
+            
+            # Convert to list and sort by tickets solved
+            agent_list = list(agent_stats.values())
+            agent_list.sort(key=lambda x: x['tickets_solved'], reverse=True)
+            
+            # Limit to top 10 agents to keep response manageable
+            top_agents = agent_list[:10]
+            
+            # Try to get agent names for the top performers
+            for agent in top_agents:
+                try:
+                    user = self.client.users(id=agent['assignee_id'])
+                    agent['name'] = getattr(user, 'name', f"User {agent['assignee_id']}")
+                    agent['email'] = getattr(user, 'email', 'Unknown')
+                except Exception as e:
+                    # If user lookup fails, try searching for the user
+                    try:
+                        search_results = self.client.search(query=f"type:user id:{agent['assignee_id']}")
+                        user_results = list(search_results)
+                        if user_results:
+                            user = user_results[0]
+                            agent['name'] = getattr(user, 'name', f"User {agent['assignee_id']}")
+                            agent['email'] = getattr(user, 'email', 'Unknown')
+                        else:
+                            agent['name'] = f"Agent {agent['assignee_id']}"
+                            agent['email'] = 'Unknown'
+                    except Exception:
+                        agent['name'] = f"Agent {agent['assignee_id']}"
+                        agent['email'] = 'Unknown'
+                
+                # Calculate average priority score
+                if agent['tickets_solved'] > 0:
+                    agent['avg_priority_score'] = round(agent['total_priority_score'] / agent['tickets_solved'], 2)
+                else:
+                    agent['avg_priority_score'] = 0
+            
+            return {
+                'period_days': days,
+                'period_start': start_date_str,
+                'total_tickets_analyzed': len(tickets),
+                'total_agents': len(agent_stats),
+                'top_performers': top_agents,
+                'summary': {
+                    'most_tickets': top_agents[0] if top_agents else None,
+                    'total_solved_by_top_10': sum(agent['tickets_solved'] for agent in top_agents)
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'error': f"Failed to get agent performance: {str(e)}",
+                'period_days': days,
+                'total_tickets_analyzed': 0,
+                'total_agents': 0,
+                'top_performers': []
+            }

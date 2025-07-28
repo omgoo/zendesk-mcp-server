@@ -255,3 +255,35 @@ This document provides practical examples of how to use the enhanced Zendesk MCP
 - Combine multiple tools for comprehensive analysis
 - Regular analytics reviews for proactive management
 - Document frequent search patterns for team use 
+
+## Agent Performance Analysis
+
+### Get Top Performing Agents (Last 7 Days)
+```
+Request: get_agent_performance
+Arguments: {"days": 7}
+```
+Returns:
+- Top 10 agents by tickets solved
+- Performance metrics and priority scores
+- Agent names and contact information
+- Summary statistics
+
+### Get Top Performing Agents (Last 30 Days)
+```
+Request: get_agent_performance  
+Arguments: {"days": 30}
+```
+
+### Get Agent Details by ID
+```
+Request: get_user_by_id
+Arguments: {"user_id": 386646129318}
+```
+Returns comprehensive user information including name, email, role, and activity status.
+
+### Performance Analysis Workflow
+1. **Get performance data**: `get_agent_performance` → See top agents by ID
+2. **Get agent details**: `get_user_by_id` → Resolve IDs to names and details
+3. **Get agent workload**: `get_user_tickets` → See current ticket load
+4. **Search agent activity**: `search_tickets` with `assignee:agent@company.com` 

@@ -98,22 +98,51 @@ Provide a clear summary of what was found and suggest refinements if needed.
 """
 
 USER_WORKLOAD_TEMPLATE = """
-You are a Zendesk team lead analyzing agent workload for user #{user_id}.
+Analyze user/agent workload and performance. Available tools:
+- get_user_tickets: Get tickets for a specific user
+- get_organization_tickets: Get tickets for an organization  
+- search_tickets: Search with user-specific queries
 
-Please gather comprehensive workload data:
-1. Get all assigned tickets for this user
-2. Get tickets they've requested (if any)
-3. Get tickets they're CC'd on for collaboration tracking
-4. Analyze the distribution by status and priority
-
-Present a workload summary including:
-- Current ticket load by status
-- Priority distribution of assigned work
-- Recent activity patterns
-- Workload balance recommendations
-
-Focus on insights that help with resource allocation and workload management.
+Useful queries:
+- assignee:user@company.com status:open (user's open tickets)
+- requester:user@company.com (tickets requested by user)
+- organization:"Company Name" status:pending
 """
+
+AGENT_PERFORMANCE_TEMPLATE = """
+Analyze support agent performance metrics over a specified time period. This tool provides:
+
+**Key Metrics:**
+- Tickets solved per agent
+- Average priority score (urgent=4, high=3, normal=2, low=1)
+- Performance ranking
+- Ticket subjects for context
+
+**Usage:**
+Use get_agent_performance tool with optional 'days' parameter (default: 7 days)
+
+**Example Analysis Questions:**
+- Who is the best performing agent this week?
+- Which agents handled the most urgent tickets?
+- Show me agent performance for the last 30 days
+- Who solved the most tickets yesterday? (days: 1)
+
+**Output includes:**
+- Top 10 performing agents
+- Agent names and contact info
+- Ticket counts and priority scores
+- Summary statistics
+
+This tool is optimized for performance analysis with minimal data to avoid overwhelming responses.
+"""
+
+# Prompt configurations
+PROMPTS = {
+    "analytics-dashboard": ANALYTICS_DASHBOARD_TEMPLATE,
+    "search-tickets": TICKET_SEARCH_TEMPLATE,
+    "analyze-user-workload": USER_WORKLOAD_TEMPLATE,
+    "agent-performance": AGENT_PERFORMANCE_TEMPLATE
+}
 
 
 @server.list_prompts()
@@ -168,6 +197,17 @@ async def handle_list_prompts() -> list[types.Prompt]:
                     required=True,
                 )
             ],
+        ),
+        types.Prompt(
+            name="agent-performance",
+            description="Analyze support agent performance metrics over a specified time period",
+            arguments=[
+                types.PromptArgument(
+                    name="days",
+                    description="Number of days to analyze (default: 7)",
+                    required=False,
+                )
+            ],
         )
     ]
 
@@ -207,6 +247,11 @@ async def handle_get_prompt(name: str, arguments: Dict[str, str] | None) -> type
             user_id = int(arguments["user_id"])
             prompt = USER_WORKLOAD_TEMPLATE.format(user_id=user_id)
             description = f"Workload analysis prompt for user #{user_id}"
+
+        elif name == "agent-performance":
+            days = int(arguments.get("days", 7)) if arguments and "days" in arguments else 7
+            prompt = AGENT_PERFORMANCE_TEMPLATE
+            description = f"Agent performance analysis prompt for {days} days"
 
         else:
             raise ValueError(f"Unknown prompt: {name}")
@@ -282,25 +327,28 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="search_tickets",
-            description="Search for tickets using Zendesk's powerful search API with query syntax",
+            name="search_tickets", 
+            description="Search for tickets using Zendesk query syntax. Returns limited results to prevent overwhelming responses.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Search query using Zendesk syntax (e.g., 'status:open priority:high', 'assignee:me', 'created>2024-01-01')"
+                        "description": "Search query (e.g., 'status:open', 'priority:urgent', 'created>7days')"
                     },
                     "sort_by": {
-                        "type": "string",
-                        "description": "Field to sort by (created_at, updated_at, priority, status, etc.)",
+                        "type": "string", 
+                        "description": "Field to sort by (created_at, updated_at, priority, status)",
                         "default": "created_at"
                     },
                     "sort_order": {
                         "type": "string",
-                        "description": "Sort order (asc or desc)",
-                        "enum": ["asc", "desc"],
+                        "description": "Sort order (asc or desc)", 
                         "default": "desc"
+                    },
+                    "compact": {
+                        "type": "boolean",
+                        "description": "Return minimal data without descriptions for better performance (default: false)"
                     }
                 },
                 "required": ["query"]
@@ -365,19 +413,44 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_satisfaction_ratings",
-            description="Get customer satisfaction (CSAT) ratings and survey responses",
+            description="Get customer satisfaction ratings with score distribution",
             inputSchema={
-                "type": "object",
+                "type": "object", 
                 "properties": {
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of ratings to retrieve",
-                        "default": 100,
+                        "description": "Maximum number of ratings to retrieve (default: 100)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_agent_performance",
+            description="Get agent performance metrics for a specified time period. Returns minimal data optimized for analysis.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "description": "Number of days to analyze (default: 7)",
                         "minimum": 1,
-                        "maximum": 1000
+                        "maximum": 90
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="get_user_by_id",
+            description="Get detailed user information by user ID. Useful for resolving agent IDs to names.",
+            inputSchema={
+                "type": "object", 
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "description": "The ID of the user to retrieve information for"
                     }
                 },
-                "required": []
+                "required": ["user_id"]
             }
         )
     ]
@@ -429,11 +502,13 @@ async def handle_call_tool(
             query = arguments["query"]
             sort_by = arguments.get("sort_by", "created_at")
             sort_order = arguments.get("sort_order", "desc")
+            compact = arguments.get("compact", False)
             
             tickets = zendesk_client.search_tickets(
                 query=query,
                 sort_by=sort_by,
-                sort_order=sort_order
+                sort_order=sort_order,
+                compact=compact
             )
             
             # Limit results to prevent overwhelming Claude
@@ -540,6 +615,24 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(stats, indent=2)
+            )]
+
+        elif name == "get_agent_performance":
+            days = arguments.get("days", 7) if arguments else 7
+            performance_data = zendesk_client.get_agent_performance(days)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(performance_data, indent=2)
+            )]
+
+        elif name == "get_user_by_id":
+            if not arguments or "user_id" not in arguments:
+                raise ValueError("Missing required argument: user_id")
+            user_id = arguments["user_id"]
+            user_info = zendesk_client.get_user_by_id(user_id)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(user_info, indent=2)
             )]
 
         else:

@@ -37,6 +37,74 @@ A Model Context Protocol (MCP) server that provides comprehensive access to Zend
 - Access to Help Center articles and sections
 - Cached knowledge base for fast retrieval
 
+### Analytics and Performance Tools
+
+- **`get_ticket_counts`**: Get overall ticket statistics
+  ```
+  Request: {}
+  ```
+
+- **`get_ticket_metrics`**: Get performance metrics for specific ticket or aggregate data
+  ```
+  Request: {"ticket_id": 12345}  // Optional
+  ```
+
+- **`get_satisfaction_ratings`**: Get customer satisfaction data with score distribution
+  ```
+  Request: {"limit": 50}  // Optional, default 100
+  ```
+
+- **`get_agent_performance`**: Get agent performance metrics optimized for analysis ⭐ **NEW**
+  ```
+  Request: {"days": 7}  // Optional, default 7, max 90
+  ```
+  
+  Returns minimal data specifically for performance analysis:
+  - Top 10 performing agents by tickets solved
+  - Agent names and contact information
+  - Priority score analysis (urgent=4, high=3, normal=2, low=1)
+  - Ticket subjects for context (truncated)
+  - Summary statistics
+  
+  **Perfect for**: "Who is the best performing agent this week?"
+
+### Search and Query Tools
+
+- **`search_tickets`**: Advanced search with Zendesk query syntax
+  ```
+  Request: {
+    "query": "status:open priority:high",
+    "sort_by": "created_at",     // Optional: created_at, updated_at, priority, status
+    "sort_order": "desc",        // Optional: asc or desc
+    "compact": false             // Optional: true for minimal data, better performance
+  }
+  ```
+  
+  **Compact Mode** ⭐ **NEW**: Set `"compact": true` to get minimal data without descriptions for performance analysis and to avoid overwhelming responses with large datasets.
+
+### User and Organization Analysis Tools
+
+- **`get_user_tickets`**: Get tickets for a specific user (requested, assigned, or CC'd)
+  ```
+  Request: {"user_id": 123, "ticket_type": "assigned"}
+  ```
+
+- **`get_organization_tickets`**: Get all tickets for an organization
+  ```
+  Request: {"organization_id": 456}
+  ```
+
+- **`get_user_by_id`**: Get detailed user information by ID ⭐ **NEW**
+  ```
+  Request: {"user_id": 386646129318}
+  ```
+  
+  Returns comprehensive user details:
+  - Name, email, role, active status
+  - Creation date, last login, timezone
+  - Organization association
+  - **Perfect for**: Resolving agent IDs to names in performance analysis
+
 ## Installation
 
 1. Clone this repository
@@ -271,3 +339,20 @@ To extend the server with additional Zendesk APIs:
 ## License
 
 MIT License - see LICENSE file for details.
+
+### Agent Performance Analysis
+
+For questions like "Who is the best performing support agent?":
+
+1. **Use the optimized tool**: `get_agent_performance` instead of large search queries
+2. **Follow up with details**: Use `get_user_by_id` to resolve agent names
+3. **Adjust time period**: Use `days` parameter (1-90) to focus analysis
+4. **Check user permissions**: Ensure API token can access user data
+
+**Example workflow**:
+```
+"Who is the best performing agent this week?"
+→ get_agent_performance (days: 7)
+→ get_user_by_id (for top agent ID)
+→ Complete analysis with names and contact info
+```
