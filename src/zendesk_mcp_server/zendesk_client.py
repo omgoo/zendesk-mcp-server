@@ -48,20 +48,46 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to get ticket {ticket_id}: {str(e)}")
 
-    def get_ticket_comments(self, ticket_id: int) -> List[Dict[str, Any]]:
+    def get_ticket_comments(self, ticket_id: int, limit: int = 10, include_body: bool = True, max_body_length: int = 300) -> List[Dict[str, Any]]:
         """
-        Get all comments for a specific ticket.
+        Get comments for a specific ticket with data limits to avoid conversation overflow.
+        
+        Args:
+            ticket_id: The ticket ID
+            limit: Maximum number of comments to return (default: 10)
+            include_body: Whether to include comment body (default: True)
+            max_body_length: Maximum length of comment body (default: 300)
         """
         try:
-            comments = self.client.tickets.comments(ticket=ticket_id)
-            return [{
-                'id': comment.id,
-                'author_id': comment.author_id,
-                'body': comment.body,
-                'html_body': comment.html_body,
-                'public': comment.public,
-                'created_at': str(comment.created_at)
-            } for comment in comments]
+            comments = list(self.client.tickets.comments(ticket=ticket_id))
+            
+            # Sort by creation date (newest first) and limit
+            comments.sort(key=lambda c: getattr(c, 'created_at', ''), reverse=True)
+            limited_comments = comments[:limit]
+            
+            result = []
+            for comment in limited_comments:
+                comment_data = {
+                    'id': getattr(comment, 'id', None),
+                    'author_id': getattr(comment, 'author_id', None),
+                    'public': getattr(comment, 'public', True),
+                    'created_at': str(getattr(comment, 'created_at', ''))
+                }
+                
+                if include_body:
+                    body = getattr(comment, 'body', '')
+                    if len(body) > max_body_length:
+                        body = body[:max_body_length] + "... [truncated]"
+                    comment_data['body'] = body
+                    
+                    # Only include html_body if it's different and short
+                    html_body = getattr(comment, 'html_body', '')
+                    if html_body and html_body != body and len(html_body) <= max_body_length:
+                        comment_data['html_body'] = html_body
+                
+                result.append(comment_data)
+            
+            return result
         except Exception as e:
             raise Exception(f"Failed to get comments for ticket {ticket_id}: {str(e)}")
 
@@ -80,15 +106,16 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to post comment on ticket {ticket_id}: {str(e)}")
 
-    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = False) -> List[Dict[str, Any]]:
+    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = False, max_description_length: int = 300) -> List[Dict[str, Any]]:
         """
-        Search for tickets using the Zendesk Search API.
+        Search for tickets using the Zendesk Search API with optimized data limits.
         
         Args:
             query: Search query string
             sort_by: Field to sort by (created_at, updated_at, priority, status, etc.)
             sort_order: Sort order (asc or desc)
-            compact: If True, returns minimal data without descriptions and comments for better performance
+            compact: If True, returns minimal data without descriptions for better performance
+            max_description_length: Maximum description length to prevent large responses
         """
         try:
             # Ensure the query includes type:ticket if not already specified
@@ -116,18 +143,19 @@ class ZendeskClient:
                     "tags": getattr(ticket, 'tags', [])
                 }
                 
-                # Only include verbose fields if not in compact mode
+                # Truncate subject in both modes (more aggressive)
+                subject = ticket_data["subject"]
+                max_subject_length = 80 if compact else 150
+                if len(subject) > max_subject_length:
+                    ticket_data["subject"] = subject[:max_subject_length-3] + "..."
+                
+                # Only include description if not in compact mode
                 if not compact:
                     description = getattr(ticket, 'description', '')
-                    # Truncate very long descriptions
-                    if len(description) > 500:
-                        description = description[:497] + "..."
+                    # More aggressive truncation to reduce conversation limits
+                    if len(description) > max_description_length:
+                        description = description[:max_description_length-3] + "..."
                     ticket_data["description"] = description
-                else:
-                    # In compact mode, truncate subject if very long
-                    subject = ticket_data["subject"]
-                    if len(subject) > 100:
-                        ticket_data["subject"] = subject[:97] + "..."
                 
                 tickets.append(ticket_data)
                 
@@ -2654,7 +2682,7 @@ class ZendeskClient:
             search_results = list(self.client.search(query=search_query))
             
             user_list = []
-            for user in search_results[:50]:  # Limit to 50 results
+            for user in search_results[:25]:  # Reduced limit to 25 results
                 user_data = {
                     'id': getattr(user, 'id', None),
                     'name': getattr(user, 'name', 'Unnamed User'),
@@ -3102,7 +3130,7 @@ class ZendeskClient:
             
             # Format results based on type
             formatted_results = []
-            for result in search_results[:100]:  # Limit to 100 results
+            for result in search_results[:50]:  # Reduced limit to 50 results
                 if search_type == 'tickets':
                     formatted_results.append({
                         'id': getattr(result, 'id', None),
@@ -3125,11 +3153,16 @@ class ZendeskClient:
                         'created_at': getattr(result, 'created_at', None)
                     })
                 elif search_type == 'organizations':
+                    # Truncate organization details to prevent large responses
+                    details = getattr(result, 'details', '')
+                    if len(details) > 200:
+                        details = details[:197] + "..."
+                    
                     formatted_results.append({
                         'id': getattr(result, 'id', None),
                         'name': getattr(result, 'name', 'Unnamed Organization'),
                         'external_id': getattr(result, 'external_id', None),
-                        'details': getattr(result, 'details', ''),
+                        'details': details,
                         'created_at': getattr(result, 'created_at', None)
                     })
             
@@ -3633,8 +3666,8 @@ class ZendeskClient:
     # TICKET EVENTS AND AUDIT LOG
     # =====================================
     
-    def get_ticket_audits(self, ticket_id: int) -> Dict[str, Any]:
-        """Get all audit events for a ticket (complete change history)"""
+    def get_ticket_audits(self, ticket_id: int, limit: int = 20, include_metadata: bool = False) -> Dict[str, Any]:
+        """Get audit events for a ticket (recent change history) with data limits"""
         try:
             # Verify ticket exists
             ticket = self.client.tickets(id=ticket_id)
@@ -3647,30 +3680,47 @@ class ZendeskClient:
             # Get ticket audits
             audits = list(self.client.tickets.audits(ticket_id))
             
+            # Sort by creation date (newest first) and limit
+            audits.sort(key=lambda a: getattr(a, 'created_at', ''), reverse=True)
+            limited_audits = audits[:limit]
+            
             audit_list = []
-            for audit in audits:
+            for audit in limited_audits:
                 audit_data = {
                     'id': getattr(audit, 'id', None),
                     'ticket_id': getattr(audit, 'ticket_id', ticket_id),
                     'created_at': getattr(audit, 'created_at', None),
                     'author_id': getattr(audit, 'author_id', None),
-                    'metadata': getattr(audit, 'metadata', {}),
                     'events': []
                 }
                 
-                # Process audit events
+                # Include metadata only if requested (can be large)
+                if include_metadata:
+                    audit_data['metadata'] = getattr(audit, 'metadata', {})
+                
+                # Process audit events (limit to important ones)
                 events = getattr(audit, 'events', [])
-                for event in events:
+                for event in events[:10]:  # Limit events per audit
                     event_data = {
                         'id': getattr(event, 'id', None),
                         'type': getattr(event, 'type', 'unknown'),
-                        'field_name': getattr(event, 'field_name', None),
-                        'previous_value': getattr(event, 'previous_value', None),
-                        'value': getattr(event, 'value', None)
+                        'field_name': getattr(event, 'field_name', None)
                     }
+                    
+                    # Truncate large values
+                    prev_val = getattr(event, 'previous_value', None)
+                    if isinstance(prev_val, str) and len(prev_val) > 100:
+                        prev_val = prev_val[:97] + "..."
+                    event_data['previous_value'] = prev_val
+                    
+                    curr_val = getattr(event, 'value', None)
+                    if isinstance(curr_val, str) and len(curr_val) > 100:
+                        curr_val = curr_val[:97] + "..."
+                    event_data['value'] = curr_val
+                    
                     audit_data['events'].append(event_data)
                 
-                # Try to get author name
+                # Try to get author name (cache this in production)
                 try:
                     author = self.client.users(id=audit_data['author_id'])
                     audit_data['author_name'] = getattr(author, 'name', 'Unknown')
@@ -3679,11 +3729,14 @@ class ZendeskClient:
                 
                 audit_list.append(audit_data)
             
+            total_audits = len(audits)
             return {
                 'status': 'success',
                 'ticket_id': ticket_id,
-                'total_audits': len(audit_list),
-                'audits': audit_list
+                'total_audits': total_audits,
+                'showing_audits': len(audit_list),
+                'audits': audit_list,
+                'note': f'Showing {len(audit_list)} most recent audits out of {total_audits} total' if total_audits > limit else None
             }
             
         except Exception as e:

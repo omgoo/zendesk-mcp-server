@@ -291,13 +291,25 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_ticket_comments",
-            description="Retrieve all comments for a Zendesk ticket by its ID",
+            description="Retrieve comments for a Zendesk ticket with data limits to avoid conversation overflow",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticket_id": {
                         "type": "integer",
                         "description": "The ID of the ticket to get comments for"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of comments to return (default: 10, reduces conversation limits)"
+                    },
+                    "include_body": {
+                        "type": "boolean",
+                        "description": "Whether to include comment content (default: true)"
+                    },
+                    "max_body_length": {
+                        "type": "integer",
+                        "description": "Maximum length of comment content (default: 300)"
                     }
                 },
                 "required": ["ticket_id"]
@@ -349,6 +361,10 @@ async def handle_list_tools() -> list[types.Tool]:
                     "compact": {
                         "type": "boolean",
                         "description": "Return minimal data without descriptions for better performance (default: false)"
+                    },
+                    "max_description_length": {
+                        "type": "integer",
+                        "description": "Maximum length of ticket descriptions to prevent large responses (default: 300)"
                     }
                 },
                 "required": ["query"]
@@ -1147,13 +1163,21 @@ async def handle_list_tools() -> list[types.Tool]:
         # TICKET EVENTS AND AUDIT LOG
         types.Tool(
             name="get_ticket_audits",
-            description="Get all audit events for a ticket (complete change history).",
+            description="Get recent audit events for a ticket with data limits to prevent conversation overflow.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticket_id": {
                         "type": "integer",
                         "description": "Ticket ID to get audits for"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of audit records to return (default: 20)"
+                    },
+                    "include_metadata": {
+                        "type": "boolean",
+                        "description": "Whether to include metadata (can be large, default: false)"
                     }
                 },
                 "required": ["ticket_id"]
@@ -1305,8 +1329,18 @@ async def handle_call_tool(
         elif name == "get_ticket_comments":
             if not arguments or "ticket_id" not in arguments:
                 raise ValueError("Missing required argument: ticket_id")
+            
+            # Support data limit parameters
+            limit = arguments.get("limit", 10)
+            include_body = arguments.get("include_body", True)
+            max_body_length = arguments.get("max_body_length", 300)
+            
             comments = zendesk_client.get_ticket_comments(
-                arguments["ticket_id"])
+                ticket_id=arguments["ticket_id"],
+                limit=limit,
+                include_body=include_body,
+                max_body_length=max_body_length
+            )
             return [types.TextContent(
                 type="text",
                 text=json.dumps(comments, indent=2)
@@ -1334,11 +1368,15 @@ async def handle_call_tool(
             sort_order = arguments.get("sort_order", "desc")
             compact = arguments.get("compact", False)
             
+            # Support additional data limit parameters
+            max_description_length = arguments.get("max_description_length", 300)
+            
             tickets = zendesk_client.search_tickets(
                 query=query,
                 sort_by=sort_by,
                 sort_order=sort_order,
-                compact=compact
+                compact=compact,
+                max_description_length=max_description_length
             )
             
             # Limit results to prevent overwhelming Claude
@@ -1914,7 +1952,16 @@ async def handle_call_tool(
             if not arguments or "ticket_id" not in arguments:
                 raise ValueError("Missing required argument: ticket_id")
             ticket_id = arguments["ticket_id"]
-            audits = zendesk_client.get_ticket_audits(ticket_id=ticket_id)
+            
+            # Support data limit parameters
+            limit = arguments.get("limit", 20)
+            include_metadata = arguments.get("include_metadata", False)
+            
+            audits = zendesk_client.get_ticket_audits(
+                ticket_id=ticket_id,
+                limit=limit,
+                include_metadata=include_metadata
+            )
             return [types.TextContent(
                 type="text",
                 text=json.dumps(audits, indent=2)
