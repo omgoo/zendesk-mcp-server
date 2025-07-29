@@ -26,6 +26,257 @@ class ZendeskClient:
             token=token
         )
         self.subdomain = subdomain
+        
+        # Response optimization settings
+        self.MAX_RESPONSE_LENGTH = 2000
+        self.DEFAULT_LIMIT = 10
+        self.MAX_LIMIT = 20
+
+    # =====================================
+    # OPTIMIZATION UTILITIES
+    # =====================================
+    
+    def _limit_response_size(self, data: Any, max_length: int = None) -> str:
+        """
+        Limit response size and add truncation notice if needed.
+        """
+        if max_length is None:
+            max_length = self.MAX_RESPONSE_LENGTH
+            
+        response = json.dumps(data, indent=2)
+        
+        if len(response) <= max_length:
+            return response
+            
+        # Truncate and add notice
+        truncated = response[:max_length-200]  # Leave room for truncation message
+        
+        # Try to cut at a reasonable point (end of line)
+        last_newline = truncated.rfind('\n')
+        if last_newline > max_length * 0.8:
+            truncated = truncated[:last_newline]
+            
+        truncation_msg = f"\n\n... (truncated, {len(response) - len(truncated)} characters omitted)\n\nResponse too large. Use specific IDs or filters for detailed data.\nTotal results available: {self._count_items(data)}"
+        
+        return truncated + truncation_msg
+    
+    def _count_items(self, data: Any) -> str:
+        """Count items in response data for truncation messages."""
+        if isinstance(data, dict):
+            if 'tickets' in data:
+                return f"{len(data['tickets'])} tickets"
+            elif 'users' in data:
+                return f"{len(data['users'])} users"
+            elif 'organizations' in data:
+                return f"{len(data['organizations'])} organizations"
+            elif isinstance(data.get('results'), list):
+                return f"{len(data['results'])} items"
+        elif isinstance(data, list):
+            return f"{len(data)} items"
+        return "multiple items"
+    
+    def _apply_limit(self, limit: Optional[int], default: int = None) -> int:
+        """Apply and validate limit parameters."""
+        if default is None:
+            default = self.DEFAULT_LIMIT
+            
+        if limit is None:
+            return default
+        return min(limit, self.MAX_LIMIT)
+    
+    def _compact_ticket(self, ticket: Any) -> Dict[str, Any]:
+        """
+        Convert ticket to compact format with only essential fields.
+        """
+        subject = getattr(ticket, 'subject', 'No subject')
+        if len(subject) > 50:
+            subject = subject[:47] + "..."
+            
+        return {
+            'id': getattr(ticket, 'id', None),
+            'subject': subject,
+            'status': getattr(ticket, 'status', None),
+            'priority': getattr(ticket, 'priority', None),
+            'created_at': getattr(ticket, 'created_at', None),
+            'assignee_id': getattr(ticket, 'assignee_id', None)
+        }
+    
+    def _compact_user(self, user: Any) -> Dict[str, Any]:
+        """Convert user to compact format."""
+        return {
+            'id': getattr(user, 'id', None),
+            'name': getattr(user, 'name', 'Unknown'),
+            'email': getattr(user, 'email', 'Unknown'),
+            'role': getattr(user, 'role', 'Unknown'),
+            'active': getattr(user, 'active', True)
+        }
+    
+    def _compact_organization(self, org: Any) -> Dict[str, Any]:
+        """Convert organization to compact format."""
+        return {
+            'id': getattr(org, 'id', None),
+            'name': getattr(org, 'name', 'Unknown'),
+            'created_at': getattr(org, 'created_at', None)
+        }
+
+    # =====================================
+    # SMART SUMMARIZATION FUNCTIONS
+    # =====================================
+    
+    def summarize_tickets(self, tickets: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Create smart summary of ticket data showing key metrics only.
+        """
+        if not tickets:
+            return {"summary": "No tickets found", "count": 0}
+            
+        # Count by status
+        status_counts = {}
+        priority_counts = {}
+        assignee_counts = {}
+        
+        for ticket in tickets:
+            status = ticket.get('status', 'unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+            
+            priority = ticket.get('priority', 'normal')
+            priority_counts[priority] = priority_counts.get(priority, 0) + 1
+            
+            assignee_id = ticket.get('assignee_id')
+            if assignee_id:
+                assignee_counts[assignee_id] = assignee_counts.get(assignee_id, 0) + 1
+        
+        return {
+            "summary": f"Found {len(tickets)} tickets",
+            "count": len(tickets),
+            "status_breakdown": status_counts,
+            "priority_distribution": priority_counts,
+            "top_assigned_agents": dict(list(sorted(assignee_counts.items(), key=lambda x: x[1], reverse=True))[:5]),
+            "recommendations": self._generate_ticket_recommendations(status_counts, priority_counts)
+        }
+    
+    def summarize_agent_performance(self, performance_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create executive summary of agent performance data.
+        """
+        if 'error' in performance_data:
+            return performance_data
+            
+        top_performers = performance_data.get('top_performers', [])
+        if not top_performers:
+            return {"summary": "No performance data available"}
+            
+        total_tickets = performance_data.get('total_tickets_analyzed', 0)
+        total_agents = performance_data.get('total_agents', 0)
+        
+        # Key insights
+        best_performer = top_performers[0] if top_performers else None
+        avg_tickets = total_tickets / total_agents if total_agents > 0 else 0
+        
+        return {
+            "summary": f"Performance analysis for {total_agents} agents over {performance_data.get('period_days', 'N/A')} days",
+            "key_metrics": {
+                "total_tickets_solved": total_tickets,
+                "active_agents": total_agents,
+                "avg_tickets_per_agent": round(avg_tickets, 1),
+                "top_performer": best_performer.get('name', 'Unknown') if best_performer else None,
+                "top_performer_tickets": best_performer.get('tickets_solved', 0) if best_performer else 0
+            },
+            "insights": [
+                f"Top 3 agents solved {sum(p.get('tickets_solved', 0) for p in top_performers[:3])} tickets",
+                f"Average {round(avg_tickets, 1)} tickets per agent",
+                "Use get_agent_performance_metrics for detailed analysis"
+            ]
+        }
+    
+    def summarize_workload(self, workload_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create executive summary of workload distribution.
+        """
+        if 'error' in workload_data:
+            return workload_data
+            
+        summary = workload_data.get('summary', {})
+        alerts = workload_data.get('workload_alerts', {})
+        
+        return {
+            "summary": f"Workload analysis: {summary.get('total_active_tickets', 0)} tickets across {summary.get('total_agents', 0)} agents",
+            "key_metrics": {
+                "total_active_tickets": summary.get('total_active_tickets', 0),
+                "avg_per_agent": summary.get('avg_tickets_per_agent', 0),
+                "unassigned_tickets": summary.get('unassigned_tickets', 0),
+                "overdue_tickets": summary.get('total_overdue_tickets', 0)
+            },
+            "alerts": {
+                "overloaded_agents": len(alerts.get('overloaded_agents', [])),
+                "underloaded_agents": len(alerts.get('underloaded_agents', [])),
+                "agents_with_overdue": len(alerts.get('agents_with_overdue', []))
+            },
+            "recommendations": workload_data.get('recommendations', [])[:3],
+            "note": "Use get_agent_workload_analysis for detailed breakdown"
+        }
+    
+    def _generate_ticket_recommendations(self, status_counts: Dict, priority_counts: Dict) -> List[str]:
+        """Generate actionable recommendations based on ticket data."""
+        recommendations = []
+        
+        open_tickets = status_counts.get('open', 0) + status_counts.get('new', 0)
+        if open_tickets > 20:
+            recommendations.append(f"High open ticket count ({open_tickets}) - consider load balancing")
+            
+        urgent_tickets = priority_counts.get('urgent', 0)
+        if urgent_tickets > 5:
+            recommendations.append(f"Multiple urgent tickets ({urgent_tickets}) need immediate attention")
+            
+        pending_tickets = status_counts.get('pending', 0)
+        if pending_tickets > 10:
+            recommendations.append(f"Review {pending_tickets} pending tickets for stalled progress")
+            
+        return recommendations[:3]
+
+    # =====================================
+    # RESPONSE FORMATTING UTILITIES
+    # =====================================
+    
+    def format_as_readable_summary(self, data: Dict[str, Any], title: str = "Results") -> str:
+        """
+        Format data as readable text summary instead of JSON dump.
+        """
+        lines = [f"📊 {title}", "=" * (len(title) + 2)]
+        
+        if 'summary' in data:
+            lines.append(f"• {data['summary']}")
+            lines.append("")
+        
+        if 'key_metrics' in data:
+            lines.append("Key Metrics:")
+            for key, value in data['key_metrics'].items():
+                formatted_key = key.replace('_', ' ').title()
+                lines.append(f"  • {formatted_key}: {value}")
+            lines.append("")
+        
+        if 'status_breakdown' in data:
+            lines.append("Status Distribution:")
+            for status, count in data['status_breakdown'].items():
+                lines.append(f"  • {status.title()}: {count}")
+            lines.append("")
+        
+        if 'recommendations' in data and data['recommendations']:
+            lines.append("📋 Recommendations:")
+            for i, rec in enumerate(data['recommendations'][:3], 1):
+                lines.append(f"  {i}. {rec}")
+            lines.append("")
+        
+        if 'note' in data:
+            lines.append(f"ℹ️  {data['note']}")
+        
+        result = "\n".join(lines)
+        
+        # Ensure it fits within response limits
+        if len(result) > self.MAX_RESPONSE_LENGTH:
+            return result[:self.MAX_RESPONSE_LENGTH-50] + "\n\n... (summary truncated)"
+            
+        return result
 
     def get_ticket(self, ticket_id: int) -> Dict[str, Any]:
         """
@@ -106,7 +357,7 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to post comment on ticket {ticket_id}: {str(e)}")
 
-    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = False, max_description_length: int = 300) -> List[Dict[str, Any]]:
+    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = True, limit: Optional[int] = None, summarize: bool = False) -> Dict[str, Any]:
         """
         Search for tickets using the Zendesk Search API with optimized data limits.
         
@@ -114,10 +365,14 @@ class ZendeskClient:
             query: Search query string
             sort_by: Field to sort by (created_at, updated_at, priority, status, etc.)
             sort_order: Sort order (asc or desc)
-            compact: If True, returns minimal data without descriptions for better performance
-            max_description_length: Maximum description length to prevent large responses
+            compact: If True, returns minimal data without descriptions for better performance (default: True)
+            limit: Maximum number of tickets to return (default: 10, max: 20)
+            summarize: If True, returns summary instead of full ticket list
         """
         try:
+            # Apply default limit
+            limit = self._apply_limit(limit)
+            
             # Ensure the query includes type:ticket if not already specified
             if "type:ticket" not in query:
                 query = f"type:ticket {query}"
@@ -128,38 +383,62 @@ class ZendeskClient:
                 sort_order=sort_order
             )
             
+            # Convert to list and apply limit
+            all_tickets = list(search_results)
+            limited_tickets = all_tickets[:limit]
+            
             tickets = []
-            for ticket in search_results:
-                ticket_data = {
-                    "id": getattr(ticket, 'id', None),
-                    "subject": getattr(ticket, 'subject', 'No subject'),
-                    "status": getattr(ticket, 'status', None),
-                    "priority": getattr(ticket, 'priority', None),
-                    "created_at": getattr(ticket, 'created_at', None),
-                    "updated_at": getattr(ticket, 'updated_at', None),
-                    "requester_id": getattr(ticket, 'requester_id', None),
-                    "assignee_id": getattr(ticket, 'assignee_id', None),
-                    "organization_id": getattr(ticket, 'organization_id', None),
-                    "tags": getattr(ticket, 'tags', [])
-                }
-                
-                # Truncate subject in both modes (more aggressive)
-                subject = ticket_data["subject"]
-                max_subject_length = 80 if compact else 150
-                if len(subject) > max_subject_length:
-                    ticket_data["subject"] = subject[:max_subject_length-3] + "..."
-                
-                # Only include description if not in compact mode
-                if not compact:
+            for ticket in limited_tickets:
+                if compact:
+                    tickets.append(self._compact_ticket(ticket))
+                else:
+                    ticket_data = {
+                        "id": getattr(ticket, 'id', None),
+                        "subject": getattr(ticket, 'subject', 'No subject'),
+                        "status": getattr(ticket, 'status', None),
+                        "priority": getattr(ticket, 'priority', None),
+                        "created_at": getattr(ticket, 'created_at', None),
+                        "updated_at": getattr(ticket, 'updated_at', None),
+                        "requester_id": getattr(ticket, 'requester_id', None),
+                        "assignee_id": getattr(ticket, 'assignee_id', None),
+                        "organization_id": getattr(ticket, 'organization_id', None),
+                        "tags": getattr(ticket, 'tags', [])
+                    }
+                    
+                    # Truncate subject
+                    subject = ticket_data["subject"]
+                    if len(subject) > 100:
+                        ticket_data["subject"] = subject[:97] + "..."
+                    
+                    # Include truncated description
                     description = getattr(ticket, 'description', '')
-                    # More aggressive truncation to reduce conversation limits
-                    if len(description) > max_description_length:
-                        description = description[:max_description_length-3] + "..."
+                    if len(description) > 200:
+                        description = description[:197] + "..."
                     ticket_data["description"] = description
+                    
+                    tickets.append(ticket_data)
+            
+            # Prepare response
+            response_data = {
+                "query": query,
+                "total_found": len(all_tickets),
+                "showing": len(tickets),
+                "compact_mode": compact,
+                "tickets": tickets
+            }
+            
+            # Add truncation warning if needed
+            if len(all_tickets) > limit:
+                response_data["note"] = f"Showing first {limit} of {len(all_tickets)} results. Use more specific query or get_ticket for details."
+            
+            # Return summary if requested
+            if summarize:
+                summary = self.summarize_tickets(tickets)
+                summary["query"] = query
+                summary["total_found"] = len(all_tickets)
+                return summary
                 
-                tickets.append(ticket_data)
-                
-            return tickets
+            return response_data
             
         except Exception as e:
             # Improve error messaging for different types of failures
@@ -241,10 +520,14 @@ class ZendeskClient:
                 'error': f"Failed to get ticket counts: {str(e)}"
             }
 
-    def get_ticket_metrics(self, ticket_id: Optional[int] = None) -> Dict[str, Any]:
+    def get_ticket_metrics(self, ticket_id: Optional[int] = None, summarize: bool = True) -> Dict[str, Any]:
         """
         Get ticket metrics for analysis. If ticket_id provided, get metrics for that ticket,
         otherwise get aggregate metrics.
+        
+        Args:
+            ticket_id: Specific ticket ID (optional)
+            summarize: Return key numbers only (default: True)
         """
         try:
             if ticket_id:
@@ -300,55 +583,147 @@ class ZendeskClient:
                         metrics['total_reopens'] = total_reopens
                         metrics['analyzed_tickets'] = valid_metrics
                 
+                # Return summary if requested
+                if summarize and not ticket_id:
+                    summary = {
+                        "summary": f"Recent metrics from {metrics['recent_tickets_count']} tickets",
+                        "key_numbers": {
+                            "avg_replies_per_ticket": metrics["avg_replies"],
+                            "avg_reopens_per_ticket": metrics["avg_reopens"],
+                            "total_replies": metrics["total_replies"],
+                            "tickets_analyzed": metrics.get("analyzed_tickets", 0)
+                        },
+                        "note": "Use summarize=False for detailed metrics"
+                    }
+                    return summary
+                
                 return metrics
         except Exception as e:
             raise Exception(f"Failed to get ticket metrics: {str(e)}")
 
-    def get_user_tickets(self, user_id: int, ticket_type: str = "requested") -> List[Dict[str, Any]]:
+    def get_user_tickets(self, user_id: int, ticket_type: str = "requested", compact: bool = True, limit: Optional[int] = None, summarize: bool = False) -> Dict[str, Any]:
         """
         Get tickets for a specific user.
         
         Args:
             user_id: User ID
             ticket_type: Type of tickets (requested, ccd, assigned)
+            compact: Return minimal data for better performance (default: True)
+            limit: Maximum number of tickets to return (default: 10, max: 20)
+            summarize: Return summary instead of full ticket list
         """
         try:
+            # Apply limit
+            limit = self._apply_limit(limit)
+            
             if ticket_type == "requested":
-                tickets = self.client.users.tickets.requested(user=user_id)
+                all_tickets = list(self.client.users.tickets.requested(user=user_id))
             elif ticket_type == "ccd":
-                tickets = self.client.users.tickets.ccd(user=user_id)
+                all_tickets = list(self.client.users.tickets.ccd(user=user_id))
             elif ticket_type == "assigned":
-                tickets = self.client.users.tickets.assigned(user=user_id)
+                all_tickets = list(self.client.users.tickets.assigned(user=user_id))
             else:
                 raise ValueError(f"Invalid ticket_type: {ticket_type}")
             
-            return [{
-                'id': ticket.id,
-                'subject': ticket.subject,
-                'status': ticket.status,
-                'priority': ticket.priority,
-                'created_at': str(ticket.created_at),
-                'updated_at': str(ticket.updated_at)
-            } for ticket in tickets]
+            # Apply limit
+            limited_tickets = all_tickets[:limit]
+            
+            tickets = []
+            for ticket in limited_tickets:
+                if compact:
+                    tickets.append(self._compact_ticket(ticket))
+                else:
+                    tickets.append({
+                        'id': ticket.id,
+                        'subject': ticket.subject,
+                        'status': ticket.status,
+                        'priority': ticket.priority,
+                        'created_at': str(ticket.created_at),
+                        'updated_at': str(ticket.updated_at),
+                        'assignee_id': getattr(ticket, 'assignee_id', None),
+                        'requester_id': getattr(ticket, 'requester_id', None)
+                    })
+            
+            response_data = {
+                "user_id": user_id,
+                "ticket_type": ticket_type,
+                "total_tickets": len(all_tickets),
+                "showing": len(tickets),
+                "compact_mode": compact,
+                "tickets": tickets
+            }
+            
+            if len(all_tickets) > limit:
+                response_data["note"] = f"Showing first {limit} of {len(all_tickets)} {ticket_type} tickets."
+            
+            if summarize:
+                summary = self.summarize_tickets(tickets)
+                summary.update({
+                    "user_id": user_id,
+                    "ticket_type": ticket_type,
+                    "total_tickets": len(all_tickets)
+                })
+                return summary
+                
+            return response_data
+            
         except Exception as e:
             raise Exception(f"Failed to get {ticket_type} tickets for user {user_id}: {str(e)}")
 
-    def get_organization_tickets(self, org_id: int) -> List[Dict[str, Any]]:
+    def get_organization_tickets(self, org_id: int, compact: bool = True, limit: Optional[int] = None, summarize: bool = False) -> Dict[str, Any]:
         """
         Get all tickets for a specific organization.
+        
+        Args:
+            org_id: Organization ID
+            compact: Return minimal data for better performance (default: True)
+            limit: Maximum number of tickets to return (default: 10, max: 20)
+            summarize: Return summary instead of full ticket list
         """
         try:
-            tickets = self.client.organizations.tickets(organization=org_id)
-            return [{
-                'id': ticket.id,
-                'subject': ticket.subject,
-                'status': ticket.status,
-                'priority': ticket.priority,
-                'requester_id': ticket.requester_id,
-                'assignee_id': ticket.assignee_id,
-                'created_at': str(ticket.created_at),
-                'updated_at': str(ticket.updated_at)
-            } for ticket in tickets]
+            # Apply limit
+            limit = self._apply_limit(limit)
+            
+            all_tickets = list(self.client.organizations.tickets(organization=org_id))
+            limited_tickets = all_tickets[:limit]
+            
+            tickets = []
+            for ticket in limited_tickets:
+                if compact:
+                    tickets.append(self._compact_ticket(ticket))
+                else:
+                    tickets.append({
+                        'id': ticket.id,
+                        'subject': ticket.subject,
+                        'status': ticket.status,
+                        'priority': ticket.priority,
+                        'requester_id': ticket.requester_id,
+                        'assignee_id': ticket.assignee_id,
+                        'created_at': str(ticket.created_at),
+                        'updated_at': str(ticket.updated_at)
+                    })
+            
+            response_data = {
+                "organization_id": org_id,
+                "total_tickets": len(all_tickets),
+                "showing": len(tickets),
+                "compact_mode": compact,
+                "tickets": tickets
+            }
+            
+            if len(all_tickets) > limit:
+                response_data["note"] = f"Showing first {limit} of {len(all_tickets)} organization tickets."
+            
+            if summarize:
+                summary = self.summarize_tickets(tickets)
+                summary.update({
+                    "organization_id": org_id,
+                    "total_tickets": len(all_tickets)
+                })
+                return summary
+                
+            return response_data
+            
         except Exception as e:
             raise Exception(f"Failed to get tickets for organization {org_id}: {str(e)}")
 
@@ -564,7 +939,8 @@ class ZendeskClient:
         agent_id: Optional[int] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        include_satisfaction: bool = True
+        include_satisfaction: bool = True,
+        summarize: bool = True
     ) -> Dict[str, Any]:
         """
         Get comprehensive agent performance metrics including:
@@ -572,6 +948,13 @@ class ZendeskClient:
         - Average response/resolution times
         - Customer satisfaction scores
         - SLA compliance
+        
+        Args:
+            agent_id: Specific agent to analyze (optional)
+            start_date: Start date for analysis (YYYY-MM-DD)
+            end_date: End date for analysis (YYYY-MM-DD)
+            include_satisfaction: Include satisfaction data
+            summarize: Return summary format (default: True)
         """
         try:
             from datetime import datetime, timedelta
@@ -663,6 +1046,25 @@ class ZendeskClient:
                 except:
                     metrics["satisfaction"] = {"error": "Could not retrieve satisfaction data"}
             
+            # Return summary if requested
+            if summarize:
+                summary = {
+                    "agent_id": agent_id,
+                    "period": f"{start_date} to {end_date}",
+                    "key_metrics": {
+                        "total_tickets": metrics["ticket_metrics"]["total_tickets"],
+                        "resolution_rate": f"{metrics['ticket_metrics']['resolution_rate']}%",
+                        "avg_response_time": f"{metrics['ticket_metrics']['avg_response_time_minutes']} min",
+                        "performance_score": metrics["performance_score"]
+                    },
+                    "note": "Use summarize=False for detailed metrics"
+                }
+                
+                if "satisfaction" in metrics and "average_score" in metrics["satisfaction"]:
+                    summary["key_metrics"]["satisfaction"] = metrics["satisfaction"]["average_score"]
+                
+                return self._limit_response_size(summary)
+            
             return metrics
             
         except Exception as e:
@@ -674,7 +1076,8 @@ class ZendeskClient:
     def get_team_performance_dashboard(
         self, 
         team_id: Optional[int] = None,
-        period: str = "week"
+        period: str = "week",
+        summarize: bool = True
     ) -> Dict[str, Any]:
         """
         Generate team-wide performance dashboard with:
@@ -682,6 +1085,11 @@ class ZendeskClient:
         - Workload distribution
         - Trend analysis
         - Bottleneck identification
+        
+        Args:
+            team_id: Optional team ID filter
+            period: Time period (week, month, quarter)
+            summarize: Return summary format (default: True)
         """
         try:
             from datetime import datetime, timedelta
@@ -798,6 +1206,20 @@ class ZendeskClient:
                     "overloaded_agents": [a for a in agent_rankings if a["current_workload"] > 15]
                 }
             }
+            
+            # Return summary if requested
+            if summarize:
+                summary = {
+                    "period": period,
+                    "team_summary": dashboard["team_summary"],
+                    "top_performers": dashboard["agent_rankings"][:3],  # Top 3 only
+                    "alerts": {
+                        "overloaded_agents": len(dashboard["workload_distribution"]["high_workload_agents"]),
+                        "low_resolution_agents": len(dashboard["bottlenecks"]["agents_with_low_resolution"])
+                    },
+                    "note": "Use summarize=False for complete dashboard"
+                }
+                return self._limit_response_size(summary)
             
             return dashboard
             
@@ -2321,8 +2743,8 @@ class ZendeskClient:
     # ORGANIZATION MANAGEMENT
     # =====================================
     
-    def get_organizations(self, external_id: str = None, name: str = None) -> Dict[str, Any]:
-        """Get organizations with optional filtering"""
+    def get_organizations(self, external_id: str = None, name: str = None, compact: bool = True, limit: Optional[int] = None) -> Dict[str, Any]:
+        """Get organizations with optional filtering and compact mode support"""
         try:
             organizations = []
             
@@ -2346,31 +2768,45 @@ class ZendeskClient:
                 # Get all organizations (paginated)
                 organizations = list(self.client.organizations())
             
-            org_list = []
-            for org in organizations[:100]:  # Limit to 100
-                org_data = {
-                    'id': getattr(org, 'id', None),
-                    'name': getattr(org, 'name', 'Unnamed Organization'),
-                    'external_id': getattr(org, 'external_id', None),
-                    'details': getattr(org, 'details', ''),
-                    'notes': getattr(org, 'notes', ''),
-                    'shared_tickets': getattr(org, 'shared_tickets', False),
-                    'shared_comments': getattr(org, 'shared_comments', False),
-                    'tags': getattr(org, 'tags', []),
-                    'created_at': getattr(org, 'created_at', None),
-                    'updated_at': getattr(org, 'updated_at', None)
-                }
-                org_list.append(org_data)
+            # Apply limit
+            limit = self._apply_limit(limit)
+            limited_orgs = organizations[:limit]
             
-            return {
+            org_list = []
+            for org in limited_orgs:
+                if compact:
+                    org_list.append(self._compact_organization(org))
+                else:
+                    org_data = {
+                        'id': getattr(org, 'id', None),
+                        'name': getattr(org, 'name', 'Unnamed Organization'),
+                        'external_id': getattr(org, 'external_id', None),
+                        'details': getattr(org, 'details', ''),
+                        'notes': getattr(org, 'notes', ''),
+                        'shared_tickets': getattr(org, 'shared_tickets', False),
+                        'shared_comments': getattr(org, 'shared_comments', False),
+                        'tags': getattr(org, 'tags', []),
+                        'created_at': getattr(org, 'created_at', None),
+                        'updated_at': getattr(org, 'updated_at', None)
+                    }
+                    org_list.append(org_data)
+            
+            response_data = {
                 'status': 'success',
-                'total_organizations': len(org_list),
+                'total_found': len(organizations),
+                'showing': len(org_list),
+                'compact_mode': compact,
                 'organizations': org_list,
                 'filters_applied': {
                     'external_id': external_id,
                     'name': name
                 }
             }
+            
+            if len(organizations) > limit:
+                response_data['note'] = f"Showing first {limit} of {len(organizations)} organizations."
+            
+            return response_data
             
         except Exception as e:
             return {

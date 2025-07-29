@@ -340,7 +340,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="search_tickets", 
-            description="Search for tickets using Zendesk query syntax. Returns limited results to prevent overwhelming responses.",
+            description="Search for tickets using Zendesk query syntax. Optimized for chat length limits with compact results by default.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -360,11 +360,15 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "compact": {
                         "type": "boolean",
-                        "description": "Return minimal data without descriptions for better performance (default: false)"
+                        "description": "Return minimal data without descriptions for better performance (default: true)"
                     },
-                    "max_description_length": {
+                    "limit": {
                         "type": "integer",
-                        "description": "Maximum length of ticket descriptions to prevent large responses (default: 300)"
+                        "description": "Maximum number of tickets to return (default: 10, max: 20)"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return summary statistics instead of full ticket list (default: false)"
                     }
                 },
                 "required": ["query"]
@@ -381,13 +385,17 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_ticket_metrics",
-            description="Get ticket metrics and analytics data. Can get metrics for a specific ticket or aggregate metrics",
+            description="Get ticket metrics and analytics data. Returns key numbers only by default to prevent large responses.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticket_id": {
                         "type": "integer",
                         "description": "Optional: ID of specific ticket to get metrics for. If not provided, returns aggregate metrics"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return key numbers only (default: true)"
                     }
                 },
                 "required": []
@@ -395,7 +403,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_user_tickets",
-            description="Get tickets for a specific user (requested, assigned, or CC'd)",
+            description="Get tickets for a specific user (requested, assigned, or CC'd). Returns compact results by default.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -408,6 +416,18 @@ async def handle_list_tools() -> list[types.Tool]:
                         "description": "Type of tickets to retrieve",
                         "enum": ["requested", "assigned", "ccd"],
                         "default": "requested"
+                    },
+                    "compact": {
+                        "type": "boolean",
+                        "description": "Return minimal data for better performance (default: true)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tickets to return (default: 10, max: 20)"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return summary statistics instead of full ticket list (default: false)"
                     }
                 },
                 "required": ["user_id"]
@@ -415,13 +435,25 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="get_organization_tickets",
-            description="Get all tickets for a specific organization",
+            description="Get all tickets for a specific organization. Returns compact results by default.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "organization_id": {
                         "type": "integer",
                         "description": "The ID of the organization"
+                    },
+                    "compact": {
+                        "type": "boolean",
+                        "description": "Return minimal data for better performance (default: true)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tickets to return (default: 10, max: 20)"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return summary statistics instead of full ticket list (default: false)"
                     }
                 },
                 "required": ["organization_id"]
@@ -472,7 +504,7 @@ async def handle_list_tools() -> list[types.Tool]:
         # Enterprise Performance Analytics
         types.Tool(
             name="get_agent_performance_metrics",
-            description="Get comprehensive agent performance metrics including response times, resolution rates, and satisfaction scores.",
+            description="Get comprehensive agent performance metrics. Returns summary statistics by default to prevent large responses.",
             inputSchema={
                 "type": "object", 
                 "properties": {
@@ -491,13 +523,17 @@ async def handle_list_tools() -> list[types.Tool]:
                     "include_satisfaction": {
                         "type": "boolean",
                         "description": "Include customer satisfaction data (default: true)"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return summary format instead of raw data (default: true)"
                     }
                 }
             }
         ),
         types.Tool(
             name="get_team_performance_dashboard",
-            description="Generate team-wide performance dashboard with agent rankings and workload distribution.",
+            description="Generate team-wide performance dashboard. Returns rankings summary by default to prevent large responses.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -508,6 +544,10 @@ async def handle_list_tools() -> list[types.Tool]:
                     "period": {
                         "type": "string",
                         "description": "Time period for analysis (week, month, quarter, default: week)"
+                    },
+                    "summarize": {
+                        "type": "boolean",
+                        "description": "Return summary format instead of full dashboard (default: true)"
                     }
                 }
             }
@@ -792,7 +832,7 @@ async def handle_list_tools() -> list[types.Tool]:
         # ORGANIZATION MANAGEMENT
         types.Tool(
             name="get_organizations",
-            description="Get organizations with optional filtering.",
+            description="Get organizations with optional filtering. Returns compact results by default.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -803,6 +843,14 @@ async def handle_list_tools() -> list[types.Tool]:
                     "name": {
                         "type": "string",
                         "description": "Filter by organization name"
+                    },
+                    "compact": {
+                        "type": "boolean",
+                        "description": "Return minimal data for better performance (default: true)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of organizations to return (default: 10, max: 20)"
                     }
                 }
             }
@@ -1439,45 +1487,19 @@ async def handle_call_tool(
         elif name == "search_tickets":
             if not arguments or "query" not in arguments:
                 raise ValueError("Missing required argument: query")
-            query = arguments["query"]
-            sort_by = arguments.get("sort_by", "created_at")
-            sort_order = arguments.get("sort_order", "desc")
-            compact = arguments.get("compact", False)
             
-            # Support additional data limit parameters
-            max_description_length = arguments.get("max_description_length", 300)
-            
-            tickets = zendesk_client.search_tickets(
-                query=query,
-                sort_by=sort_by,
-                sort_order=sort_order,
-                compact=compact,
-                max_description_length=max_description_length
+            result = zendesk_client.search_tickets(
+                query=arguments["query"],
+                sort_by=arguments.get("sort_by", "created_at"),
+                sort_order=arguments.get("sort_order", "desc"),
+                compact=arguments.get("compact", True),
+                limit=arguments.get("limit"),
+                summarize=arguments.get("summarize", False)
             )
             
-            # Limit results to prevent overwhelming Claude
-            max_tickets = 25  # Reasonable limit for display
-            if len(tickets) > max_tickets:
-                limited_tickets = tickets[:max_tickets]
-                return [types.TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "query": query,
-                        "total_found": len(tickets),
-                        "showing": max_tickets,
-                        "note": f"Showing first {max_tickets} of {len(tickets)} results. Use more specific query to narrow results.",
-                        "tickets": limited_tickets
-                    }, indent=2)
-                )]
-            else:
-                return [types.TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "query": query,
-                        "total_found": len(tickets),
-                        "tickets": tickets
-                    }, indent=2)
-                )]
+            # Use response size limiting
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_ticket_counts":
             # No arguments required for this tool
@@ -1490,47 +1512,44 @@ async def handle_call_tool(
         elif name == "get_ticket_metrics":
             # Optional ticket_id argument
             ticket_id = arguments.get("ticket_id") if arguments else None
-            metrics = zendesk_client.get_ticket_metrics(ticket_id)
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(metrics, indent=2)
-            )]
+            summarize = arguments.get("summarize", True) if arguments else True
+            
+            result = zendesk_client.get_ticket_metrics(
+                ticket_id=ticket_id,
+                summarize=summarize
+            )
+            
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_user_tickets":
             if not arguments or "user_id" not in arguments:
                 raise ValueError("Missing required argument: user_id")
-            user_id = arguments["user_id"]
-            ticket_type = arguments.get("ticket_type", "requested")
             
-            tickets = zendesk_client.get_user_tickets(
-                user_id=user_id,
-                ticket_type=ticket_type
+            result = zendesk_client.get_user_tickets(
+                user_id=arguments["user_id"],
+                ticket_type=arguments.get("ticket_type", "requested"),
+                compact=arguments.get("compact", True),
+                limit=arguments.get("limit"),
+                summarize=arguments.get("summarize", False)
             )
             
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "user_id": user_id,
-                    "ticket_type": ticket_type,
-                    "total_tickets": len(tickets),
-                    "tickets": tickets
-                }, indent=2)
-            )]
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_organization_tickets":
             if not arguments or "organization_id" not in arguments:
                 raise ValueError("Missing required argument: organization_id")
-            org_id = arguments["organization_id"]
-            tickets = zendesk_client.get_organization_tickets(org_id)
             
-            return [types.TextContent(
-                type="text",
-                text=json.dumps({
-                    "organization_id": org_id,
-                    "total_tickets": len(tickets),
-                    "tickets": tickets
-                }, indent=2)
-            )]
+            result = zendesk_client.get_organization_tickets(
+                org_id=arguments["organization_id"],
+                compact=arguments.get("compact", True),
+                limit=arguments.get("limit"),
+                summarize=arguments.get("summarize", False)
+            )
+            
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_satisfaction_ratings":
             # Optional limit argument
@@ -1564,10 +1583,11 @@ async def handle_call_tool(
         elif name == "get_agent_performance":
             days = arguments.get("days", 7) if arguments else 7
             performance_data = zendesk_client.get_agent_performance(days)
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(performance_data, indent=2)
-            )]
+            
+            # Use summarization for better response management
+            summary = zendesk_client.summarize_agent_performance(performance_data)
+            response_text = zendesk_client._limit_response_size(summary)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_user_by_id":
             if not arguments or "user_id" not in arguments:
@@ -1584,30 +1604,32 @@ async def handle_call_tool(
             start_date = arguments.get("start_date") if arguments else None
             end_date = arguments.get("end_date") if arguments else None
             include_satisfaction = arguments.get("include_satisfaction", True) if arguments else True
+            summarize = arguments.get("summarize", True) if arguments else True
             
-            metrics = zendesk_client.get_agent_performance_metrics(
+            result = zendesk_client.get_agent_performance_metrics(
                 agent_id=agent_id,
                 start_date=start_date,
                 end_date=end_date,
-                include_satisfaction=include_satisfaction
+                include_satisfaction=include_satisfaction,
+                summarize=summarize
             )
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(metrics, indent=2)
-            )]
+            
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_team_performance_dashboard":
             team_id = arguments.get("team_id") if arguments else None
             period = arguments.get("period", "week") if arguments else "week"
+            summarize = arguments.get("summarize", True) if arguments else True
             
-            dashboard = zendesk_client.get_team_performance_dashboard(
+            result = zendesk_client.get_team_performance_dashboard(
                 team_id=team_id,
-                period=period
+                period=period,
+                summarize=summarize
             )
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(dashboard, indent=2)
-            )]
+            
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "generate_agent_scorecard":
             if not arguments or "agent_id" not in arguments:
@@ -1632,10 +1654,11 @@ async def handle_call_tool(
                 include_pending=include_pending,
                 include_open=include_open
             )
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(analysis, indent=2)
-            )]
+            
+            # Use summarization for better response management
+            summary = zendesk_client.summarize_workload(analysis)
+            response_text = zendesk_client._limit_response_size(summary)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "suggest_ticket_reassignment":
             criteria = arguments.get("criteria", "workload_balance") if arguments else "workload_balance"
@@ -1801,11 +1824,18 @@ async def handle_call_tool(
         elif name == "get_organizations":
             external_id = arguments.get("external_id") if arguments else None
             name = arguments.get("name") if arguments else None
-            organizations = zendesk_client.get_organizations(external_id=external_id, name=name)
-            return [types.TextContent(
-                type="text",
-                text=json.dumps(organizations, indent=2)
-            )]
+            compact = arguments.get("compact", True) if arguments else True
+            limit = arguments.get("limit") if arguments else None
+            
+            result = zendesk_client.get_organizations(
+                external_id=external_id, 
+                name=name,
+                compact=compact,
+                limit=limit
+            )
+            
+            response_text = zendesk_client._limit_response_size(result)
+            return [types.TextContent(type="text", text=response_text)]
 
         elif name == "get_organization_details":
             if not arguments or "org_id" not in arguments:
