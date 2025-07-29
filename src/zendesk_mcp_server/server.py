@@ -1251,6 +1251,15 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["ticket_id", "user_ids"]
             }
         ),
+        types.Tool(
+            name="get_data_limits_info",
+            description="Get information about data limits and how to access full data when needed. Explains options for getting complete, untruncated data.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
 
         # ADVANCED REPORTING
         types.Tool(
@@ -1305,6 +1314,73 @@ async def handle_list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["agent_id", "start_date", "end_date"]
+            }
+        ),
+
+        # FULL DATA ACCESS TOOLS (WARNING: May return large responses)
+        types.Tool(
+            name="get_ticket_comments_full",
+            description="Get full, untruncated comments for a ticket. WARNING: May return large amounts of data - use only when you need complete comment content.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ID of the ticket to get full comments for"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of comments to return (optional, returns all if not specified)"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="get_ticket_audits_full",
+            description="Get full, untruncated audit history for a ticket. WARNING: May return large amounts of data - use only when you need complete audit details.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "Ticket ID to get full audits for"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of audit records to return (optional, returns all if not specified)"
+                    }
+                },
+                "required": ["ticket_id"]
+            }
+        ),
+        types.Tool(
+            name="search_tickets_full",
+            description="Search for tickets with full, untruncated data including complete descriptions. WARNING: May return large amounts of data - use only when you need complete ticket details.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (e.g., 'status:open', 'priority:urgent')"
+                    },
+                    "sort_by": {
+                        "type": "string",
+                        "description": "Field to sort by (created_at, updated_at, priority, status)",
+                        "default": "created_at"
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "description": "Sort order (asc or desc)",
+                        "default": "desc"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tickets to return (default: 50)",
+                        "default": 50
+                    }
+                },
+                "required": ["query"]
             }
         )
     ]
@@ -2038,6 +2114,48 @@ async def handle_call_tool(
             return [types.TextContent(
                 type="text",
                 text=json.dumps(report, indent=2)
+            )]
+
+        elif name == "get_ticket_comments_full":
+            ticket_id = arguments.get("ticket_id") if arguments else None
+            limit = arguments.get("limit") if arguments else None
+            if not ticket_id:
+                raise ValueError("Missing required argument: ticket_id")
+            comments = zendesk_client.get_ticket_comments_full(ticket_id=ticket_id, limit=limit)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(comments, indent=2)
+            )]
+
+        elif name == "get_ticket_audits_full":
+            ticket_id = arguments.get("ticket_id") if arguments else None
+            limit = arguments.get("limit") if arguments else None
+            if not ticket_id:
+                raise ValueError("Missing required argument: ticket_id")
+            audits = zendesk_client.get_ticket_audits_full(ticket_id=ticket_id, limit=limit)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(audits, indent=2)
+            )]
+
+        elif name == "search_tickets_full":
+            query = arguments.get("query") if arguments else None
+            sort_by = arguments.get("sort_by", "created_at") if arguments else "created_at"
+            sort_order = arguments.get("sort_order", "desc") if arguments else "desc"
+            limit = arguments.get("limit", 50) if arguments else 50
+            if not query:
+                raise ValueError("Missing required argument: query")
+            tickets = zendesk_client.search_tickets_full(query=query, sort_by=sort_by, sort_order=sort_order, limit=limit)
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(tickets, indent=2)
+            )]
+
+        elif name == "get_data_limits_info":
+            info = zendesk_client.get_data_limits_info()
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(info, indent=2)
             )]
 
         else:

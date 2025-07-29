@@ -617,6 +617,56 @@ Arguments: {}
 ```
 **Use Case**: SLA management - review all SLA policies and their metrics for compliance planning.
 
+## 🔧 **Data Limits and Full Data Access**
+
+### Check Data Limits and Options
+```
+Request: get_data_limits_info
+Arguments: {}
+```
+**Use Case**: Understanding current data limits and learning how to access full data when needed.
+
+### Get More Comments with Custom Limits
+```
+Request: get_ticket_comments
+Arguments: {
+  "ticket_id": 12345,
+  "limit": 25,
+  "max_body_length": 800
+}
+```
+**Use Case**: Investigation - get more comments with longer content than default limits.
+
+### Get Full Untruncated Comments
+```
+Request: get_ticket_comments_full
+Arguments: {
+  "ticket_id": 12345,
+  "limit": 10
+}
+```
+**Use Case**: Deep analysis - get complete comment content without any truncation (WARNING: large data).
+
+### Get Full Untruncated Audit History
+```
+Request: get_ticket_audits_full
+Arguments: {
+  "ticket_id": 12345,
+  "limit": 20
+}
+```
+**Use Case**: Compliance audit - get complete, untruncated audit trail with full metadata (WARNING: large data).
+
+### Search with Full Descriptions
+```
+Request: search_tickets_full
+Arguments: {
+  "query": "status:open priority:high",
+  "limit": 10
+}
+```
+**Use Case**: Detailed investigation - search tickets with complete subjects and descriptions (WARNING: large data).
+
 ## 📚 **Knowledge Base Integration**
 
 ### Check Help Center Status (Diagnostic)

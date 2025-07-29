@@ -4205,3 +4205,213 @@ class ZendeskClient:
                 'status': 'error',
                 'message': f'Failed to generate agent activity report: {str(e)}'
             }
+
+    def get_ticket_comments_full(self, ticket_id: int, limit: int = None) -> List[Dict[str, Any]]:
+        """
+        Get full, untruncated comments for a ticket - use when you need complete data.
+        WARNING: May return large amounts of data.
+        """
+        try:
+            comments = list(self.client.tickets.comments(ticket=ticket_id))
+            
+            # Sort by creation date (newest first)
+            comments.sort(key=lambda c: getattr(c, 'created_at', ''), reverse=True)
+            
+            # Apply limit if specified
+            if limit:
+                comments = comments[:limit]
+            
+            result = []
+            for comment in comments:
+                comment_data = {
+                    'id': getattr(comment, 'id', None),
+                    'author_id': getattr(comment, 'author_id', None),
+                    'body': getattr(comment, 'body', ''),  # Full, untruncated
+                    'html_body': getattr(comment, 'html_body', ''),  # Full, untruncated
+                    'public': getattr(comment, 'public', True),
+                    'created_at': str(getattr(comment, 'created_at', ''))
+                }
+                result.append(comment_data)
+            
+            return result
+        except Exception as e:
+            raise Exception(f"Failed to get full comments for ticket {ticket_id}: {str(e)}")
+
+    def get_ticket_audits_full(self, ticket_id: int, limit: int = None) -> Dict[str, Any]:
+        """
+        Get full, untruncated audit history for a ticket - use when you need complete data.
+        WARNING: May return large amounts of data.
+        """
+        try:
+            # Verify ticket exists
+            ticket = self.client.tickets(id=ticket_id)
+            if not ticket:
+                return {
+                    'status': 'error',
+                    'message': f'Ticket {ticket_id} not found'
+                }
+            
+            # Get all ticket audits
+            audits = list(self.client.tickets.audits(ticket_id))
+            
+            # Sort by creation date (newest first)
+            audits.sort(key=lambda a: getattr(a, 'created_at', ''), reverse=True)
+            
+            # Apply limit if specified
+            if limit:
+                audits = audits[:limit]
+            
+            audit_list = []
+            for audit in audits:
+                audit_data = {
+                    'id': getattr(audit, 'id', None),
+                    'ticket_id': getattr(audit, 'ticket_id', ticket_id),
+                    'created_at': getattr(audit, 'created_at', None),
+                    'author_id': getattr(audit, 'author_id', None),
+                    'metadata': getattr(audit, 'metadata', {}),  # Full metadata
+                    'events': []
+                }
+                
+                # Process ALL audit events (no limit)
+                events = getattr(audit, 'events', [])
+                for event in events:
+                    event_data = {
+                        'id': getattr(event, 'id', None),
+                        'type': getattr(event, 'type', 'unknown'),
+                        'field_name': getattr(event, 'field_name', None),
+                        'previous_value': getattr(event, 'previous_value', None),  # Full, untruncated
+                        'value': getattr(event, 'value', None)  # Full, untruncated
+                    }
+                    audit_data['events'].append(event_data)
+                
+                # Try to get author name
+                try:
+                    author = self.client.users(id=audit_data['author_id'])
+                    audit_data['author_name'] = getattr(author, 'name', 'Unknown')
+                except Exception:
+                    audit_data['author_name'] = 'Unknown'
+                
+                audit_list.append(audit_data)
+            
+            total_audits = len(list(self.client.tickets.audits(ticket_id)))
+            return {
+                'status': 'success',
+                'ticket_id': ticket_id,
+                'total_audits': total_audits,
+                'showing_audits': len(audit_list),
+                'audits': audit_list,
+                'note': 'FULL DATA - untruncated audit history'
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to get full ticket audits: {str(e)}'
+            }
+
+    def search_tickets_full(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Search for tickets with full, untruncated data - use when you need complete details.
+        WARNING: May return large amounts of data.
+        
+        Args:
+            query: Search query string
+            sort_by: Field to sort by
+            sort_order: Sort order (asc or desc)
+            limit: Maximum number of tickets to return
+        """
+        try:
+            # Ensure the query includes type:ticket if not already specified
+            if "type:ticket" not in query:
+                query = f"type:ticket {query}"
+            
+            search_results = self.client.search(
+                query=query,
+                sort_by=sort_by,
+                sort_order=sort_order
+            )
+            
+            tickets = []
+            for ticket in list(search_results)[:limit]:
+                ticket_data = {
+                    "id": getattr(ticket, 'id', None),
+                    "subject": getattr(ticket, 'subject', 'No subject'),  # Full subject
+                    "description": getattr(ticket, 'description', ''),  # Full description
+                    "status": getattr(ticket, 'status', None),
+                    "priority": getattr(ticket, 'priority', None),
+                    "type": getattr(ticket, 'type', None),
+                    "created_at": getattr(ticket, 'created_at', None),
+                    "updated_at": getattr(ticket, 'updated_at', None),
+                    "requester_id": getattr(ticket, 'requester_id', None),
+                    "assignee_id": getattr(ticket, 'assignee_id', None),
+                    "organization_id": getattr(ticket, 'organization_id', None),
+                    "group_id": getattr(ticket, 'group_id', None),
+                    "tags": getattr(ticket, 'tags', []),
+                    "custom_fields": getattr(ticket, 'custom_fields', [])
+                }
+                tickets.append(ticket_data)
+                
+            return tickets
+            
+        except Exception as e:
+            raise Exception(f"Failed to search tickets (full): {str(e)}")
+
+    def get_data_limits_info(self) -> Dict[str, Any]:
+        """
+        Get information about data limits and how to access full data when needed.
+        """
+        return {
+            'status': 'success',
+            'data_limits': {
+                'purpose': 'Data limits prevent conversation overflow in Claude Desktop',
+                'standard_limits': {
+                    'ticket_comments': '10 comments, 300 chars each',
+                    'ticket_audits': '20 audits, 100 chars per value',
+                    'search_tickets': '25 results, 300 char descriptions',
+                    'search_users': '25 results',
+                    'advanced_search': '50 results'
+                },
+                'customization_options': {
+                    'get_ticket_comments': {
+                        'limit': 'Number of comments (default: 10)',
+                        'max_body_length': 'Max comment length (default: 300)',
+                        'include_body': 'Whether to include content (default: true)'
+                    },
+                    'get_ticket_audits': {
+                        'limit': 'Number of audits (default: 20)',
+                        'include_metadata': 'Include metadata (default: false)'
+                    },
+                    'search_tickets': {
+                        'max_description_length': 'Max description length (default: 300)',
+                        'compact': 'Minimal data mode (default: false)'
+                    }
+                },
+                'full_data_methods': {
+                    'get_ticket_comments_full': 'Get complete, untruncated comments',
+                    'get_ticket_audits_full': 'Get complete, untruncated audit history',
+                    'search_tickets_full': 'Get tickets with full descriptions and subjects',
+                    'get_ticket': 'Already returns full data for individual tickets',
+                    'export_search_results': 'Already returns untruncated data for exports'
+                }
+            },
+            'usage_recommendations': {
+                'daily_work': 'Use standard methods with default limits',
+                'investigation': 'Increase limits: limit=50, max_body_length=1000',
+                'deep_analysis': 'Use *_full methods but expect large responses',
+                'reporting': 'Use export_search_results for bulk data'
+            },
+            'examples': {
+                'more_comments': {
+                    'name': 'get_ticket_comments',
+                    'arguments': {'ticket_id': 12345, 'limit': 25, 'max_body_length': 800}
+                },
+                'full_comments': {
+                    'name': 'get_ticket_comments_full',
+                    'arguments': {'ticket_id': 12345, 'limit': 10}
+                },
+                'full_search': {
+                    'name': 'search_tickets_full',
+                    'arguments': {'query': 'status:open', 'limit': 10}
+                }
+            }
+        }
