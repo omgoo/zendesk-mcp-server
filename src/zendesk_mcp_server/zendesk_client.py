@@ -96,8 +96,103 @@ class ZendeskClient:
         self.MAX_LIMIT = 20
 
     # =====================================
-    # OPTIMIZATION UTILITIES
+    # OPTIMIZATION AND CATEGORIZATION UTILITIES
     # =====================================
+    
+    def _categorize_ticket(self, ticket: Any) -> str:
+        """Categorize individual ticket based on content"""
+        subject = str(getattr(ticket, 'subject', '')).lower()
+        description = str(getattr(ticket, 'description', '')).lower()
+        tags = [t.lower() for t in getattr(ticket, 'tags', [])]
+        tags_str = ' '.join(tags)
+        combined = f"{subject} {description} {tags_str}"
+        
+        # Define category patterns
+        categories = {
+            'web_crawl_mirrorweb': ['mirrorweb', 'web', 'crawl', 'spider', 'qa:'],
+            'email_archiving': ['email', 'domain', 'missing archive', 'archive'],
+            'access_dashboard': ['access', 'login', 'dashboard', 'unable', '404'],
+            'backup_cloud': ['backup', 'cloud', 'onedrive', 'failed'],
+            'onboarding': ['onboarding', 'setup', 'new', 'welcome'],
+            'technical_issue': ['error', 'bug', 'crash', 'not working'],
+            'feature_request': ['feature', 'enhancement', 'request', 'would like'],
+            'billing': ['billing', 'invoice', 'payment', 'charge'],
+            'urgent_support': ['urgent', 'emergency', 'critical', 'production down']
+        }
+        
+        for category, terms in categories.items():
+            if any(term in combined for term in terms):
+                return category
+                
+        return 'other'
+    
+    def _estimate_response_size(self, data: Any) -> int:
+        """Estimate JSON response size in bytes"""
+        try:
+            return len(json.dumps(data, default=str))
+        except:
+            # Fallback for non-serializable objects
+            return len(str(data))
+    
+    def _create_truncated_response(
+        self,
+        data: Dict[str, Any],
+        items_key: str,
+        max_size: int,
+        page: int = 1,
+        total_items: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Intelligently truncate response when it exceeds max size.
+        
+        Args:
+            data: Original response dictionary
+            items_key: Key containing the list of items to truncate
+            max_size: Maximum allowed response size
+            page: Current page number
+            total_items: Total number of items (if known)
+        """
+        # Calculate base response size without items
+        base_data = {k: v for k, v in data.items() if k != items_key}
+        base_size = self._estimate_response_size(base_data)
+        
+        # Reserve space for pagination and truncation info
+        available_size = max_size - base_size - 500
+        
+        items = data.get(items_key, [])
+        if not items:
+            return data
+            
+        # Calculate optimal number of items
+        items_to_include = []
+        current_size = 0
+        
+        for item in items:
+            item_size = self._estimate_response_size(item)
+            if current_size + item_size > available_size:
+                break
+            items_to_include.append(item)
+            current_size += item_size
+        
+        # Create paginated response
+        return PaginatedResponse.create(
+            data={items_key: items_to_include},
+            total_count=total_items or len(items),
+            page_size=len(items_to_include),
+            current_page=page,
+            next_cursor=str(items_to_include[-1]['id']) if items_to_include else None,
+            summary=self._generate_summary(items),
+            metadata={
+                **base_data,
+                'truncation_info': {
+                    'truncated': len(items_to_include) < len(items),
+                    'showing': len(items_to_include),
+                    'total_found': len(items),
+                    'estimated_response_size': current_size + base_size,
+                    'max_allowed_size': max_size
+                }
+            }
+        ).to_dict()
     
     def _limit_response_size(self, data: Any, max_length: int = None) -> Union[str, Dict[str, Any]]:
         """
@@ -288,7 +383,7 @@ class ZendeskClient:
     # SMART SUMMARIZATION FUNCTIONS
     # =====================================
     
-    def summarize_tickets(self, tickets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def summarize_tickets(self, tickets: List[Any]) -> Dict[str, Any]:
         """
         Create smart summary of ticket data showing key metrics only.
         """
@@ -301,13 +396,13 @@ class ZendeskClient:
         assignee_counts = {}
         
         for ticket in tickets:
-            status = ticket.get('status', 'unknown')
+            status = getattr(ticket, 'status', 'unknown')
             status_counts[status] = status_counts.get(status, 0) + 1
             
-            priority = ticket.get('priority', 'normal')
+            priority = getattr(ticket, 'priority', 'normal')
             priority_counts[priority] = priority_counts.get(priority, 0) + 1
             
-            assignee_id = ticket.get('assignee_id')
+            assignee_id = getattr(ticket, 'assignee_id', None)
             if assignee_id:
                 assignee_counts[assignee_id] = assignee_counts.get(assignee_id, 0) + 1
         
@@ -525,40 +620,50 @@ class ZendeskClient:
     def search_tickets(
         self,
         query: str,
+        limit: int = 20,
+        compact: bool = True,
+        include_description: bool = False,
         sort_by: str = "created_at",
         sort_order: str = "desc",
-        compact: bool = True,
-        limit: Optional[int] = None,
+        max_response_size: Optional[int] = None,
+        summary_mode: bool = False,
+        categorize: bool = False,
         page: int = 1,
-        cursor: Optional[str] = None,
-        summarize: bool = False
+        cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Search for tickets using the Zendesk Search API with smart pagination.
+        Unified ticket search with intelligent response management.
         
         Args:
-            query: Search query string using Zendesk Search syntax
-            sort_by: Field to sort by (default: created_at)
-            sort_order: Sort direction - asc or desc (default: desc)
-            compact: Return compact ticket format (default: True)
-            limit: Maximum number of tickets per page (default: 10, max: 20)
-            page: Page number to fetch (default: 1)
-            cursor: Pagination cursor from previous response
-            summarize: Include ticket summary stats (default: False)
+            query: Zendesk search query string
+            limit: Maximum tickets to return (1-100)
+            compact: Return minimal data for better performance
+            include_description: Include full ticket descriptions
+            sort_by: Field to sort by (created_at, updated_at, priority, status)
+            sort_order: Sort direction (asc/desc)
+            max_response_size: Auto-truncate if response exceeds this size
+            summary_mode: Return summary statistics instead of full tickets
+            categorize: Add automatic categorization to results
+            page: Page number for pagination
+            cursor: Cursor for continuing from previous results
             
         Returns:
-            PaginatedResponse containing:
-            - data: List of tickets for current page
-            - pagination: Information about total results and next page
-            - summary: Statistical summary of all matching tickets
-            - metadata: Additional context about the search
+            Intelligent response based on parameters and data size:
+            - Full results when within size limits
+            - Truncated results with pagination when too large
+            - Summary statistics when summary_mode=True
+            - Category analysis when categorize=True
         """
         try:
-            # Apply default limit and ensure valid page
-            page_size = self._apply_limit(limit)
-            page = max(1, page)
+            # Set defaults
+            if max_response_size is None:
+                max_response_size = self.MAX_RESPONSE_LENGTH
             
-            # Ensure the query includes type:ticket if not already specified
+            # Ensure valid page and limit
+            page = max(1, page)
+            limit = min(max(1, limit), 100)  # Allow up to 100 items
+            
+            # Ensure the query includes type:ticket
             if "type:ticket" not in query:
                 query = f"type:ticket {query}"
             
@@ -569,78 +674,94 @@ class ZendeskClient:
                 sort_order=sort_order
             )
             
-            # Convert generator to list for processing
+            # Convert generator to list
             all_tickets = list(search_results)
             total_tickets = len(all_tickets)
             
+            # Handle summary mode for large datasets
+            if summary_mode:
+                summary = self.summarize_tickets(all_tickets)
+                summary.update({
+                    'query': query,
+                    'total_tickets': total_tickets,
+                    'status_distribution': self._count_by_field(all_tickets, 'status'),
+                    'priority_distribution': self._count_by_field(all_tickets, 'priority'),
+                    'sample_tickets': [
+                        self._compact_ticket(t) for t in all_tickets[:5]
+                    ]
+                })
+                if categorize:
+                    summary['category_distribution'] = self._count_by_category(all_tickets)
+                return summary
+            
             # Calculate pagination
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
             page_tickets = all_tickets[start_idx:end_idx]
             
-            # Process tickets for current page
-            tickets = []
+            # Process tickets
+            processed_tickets = []
             for ticket in page_tickets:
                 if compact:
-                    tickets.append(self._compact_ticket(ticket))
+                    ticket_data = self._compact_ticket(ticket)
                 else:
                     ticket_data = {
-                        "id": getattr(ticket, 'id', None),
-                        "subject": getattr(ticket, 'subject', 'No subject'),
-                        "status": getattr(ticket, 'status', None),
-                        "priority": getattr(ticket, 'priority', None),
-                        "created_at": getattr(ticket, 'created_at', None),
-                        "updated_at": getattr(ticket, 'updated_at', None),
-                        "requester_id": getattr(ticket, 'requester_id', None),
-                        "assignee_id": getattr(ticket, 'assignee_id', None),
-                        "organization_id": getattr(ticket, 'organization_id', None),
-                        "tags": getattr(ticket, 'tags', [])
+                        'id': getattr(ticket, 'id', None),
+                        'subject': getattr(ticket, 'subject', 'No subject'),
+                        'status': getattr(ticket, 'status', None),
+                        'priority': getattr(ticket, 'priority', None),
+                        'created_at': getattr(ticket, 'created_at', None),
+                        'updated_at': getattr(ticket, 'updated_at', None),
+                        'requester_id': getattr(ticket, 'requester_id', None),
+                        'assignee_id': getattr(ticket, 'assignee_id', None),
+                        'organization_id': getattr(ticket, 'organization_id', None),
+                        'tags': getattr(ticket, 'tags', [])
                     }
                     
-                    # Truncate subject
-                    subject = ticket_data["subject"]
-                    if len(subject) > 100:
-                        ticket_data["subject"] = subject[:97] + "..."
-                    
-                    # Include truncated description
-                    description = getattr(ticket, 'description', '')
-                    if description and len(description) > 200:
-                        description = description[:197] + "..."
-                    ticket_data["description"] = description
-                    
-                    tickets.append(ticket_data)
-            
-            # Generate summary of all tickets if requested
-            summary = None
-            if summarize:
-                summary = self.summarize_tickets(all_tickets)
-                summary["query"] = query
+                    if include_description:
+                        description = getattr(ticket, 'description', '')
+                        ticket_data['description'] = description
                 
-            # Calculate next cursor (based on last ticket ID)
-            next_cursor = None
-            if end_idx < total_tickets and page_tickets:
-                last_ticket = page_tickets[-1]
-                next_cursor = str(getattr(last_ticket, 'id', None))
+                if categorize:
+                    ticket_data['category'] = self._categorize_ticket(ticket)
+                    
+                processed_tickets.append(ticket_data)
             
-            # Create paginated response
-            response = PaginatedResponse.create(
-                data={"tickets": tickets},
-                total_count=total_tickets,
-                page_size=page_size,
-                current_page=page,
-                next_cursor=next_cursor,
-                summary=summary,
-                metadata={
-                    "query": query,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order,
-                    "compact": compact,
-                    "estimated_total_size": len(str(all_tickets)),
-                    "current_page_size": len(str(tickets))
+            # Build response with all metadata
+            result = {
+                'tickets': processed_tickets,
+                'total_found': total_tickets,
+                'query': query,
+                'parameters': {
+                    'compact': compact,
+                    'limit': limit,
+                    'page': page,
+                    'sort_by': sort_by,
+                    'include_description': include_description,
+                    'categorize': categorize
                 }
-            )
+            }
             
-            return response.to_dict()
+            # Add category summary if requested
+            if categorize:
+                result['category_summary'] = self._count_by_category(all_tickets)
+            
+            # Handle size management
+            estimated_size = self._estimate_response_size(result)
+            if estimated_size > max_response_size:
+                return self._create_truncated_response(
+                    data=result,
+                    items_key='tickets',
+                    max_size=max_response_size,
+                    page=page,
+                    total_items=total_tickets
+                )
+            
+            # Calculate next cursor
+            if end_idx < total_tickets and processed_tickets:
+                result['next_cursor'] = str(processed_tickets[-1]['id'])
+            
+            return result
             
         except Exception as e:
             error_msg = str(e)
@@ -652,6 +773,22 @@ class ZendeskClient:
                 raise Exception(f"Permission denied. Your API token may not have search permissions. Original error: {error_msg}")
             else:
                 raise Exception(f"Search failed: {error_msg}")
+                
+    def _count_by_field(self, items: List[Any], field: str) -> Dict[str, int]:
+        """Count items by a specific field value"""
+        counts: Dict[str, int] = {}
+        for item in items:
+            value = str(getattr(item, field, 'unknown'))
+            counts[value] = counts.get(value, 0) + 1
+        return counts
+        
+    def _count_by_category(self, tickets: List[Any]) -> Dict[str, int]:
+        """Count tickets by their categories"""
+        counts: Dict[str, int] = {}
+        for ticket in tickets:
+            category = self._categorize_ticket(ticket)
+            counts[category] = counts.get(category, 0) + 1
+        return counts
 
     def get_ticket_counts(self) -> Dict[str, Any]:
         """
@@ -4946,52 +5083,7 @@ class ZendeskClient:
                 'message': f'Failed to get full ticket audits: {str(e)}'
             }
 
-    def search_tickets_full(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Search for tickets with full, untruncated data - use when you need complete details.
-        WARNING: May return large amounts of data.
-        
-        Args:
-            query: Search query string
-            sort_by: Field to sort by
-            sort_order: Sort order (asc or desc)
-            limit: Maximum number of tickets to return
-        """
-        try:
-            # Ensure the query includes type:ticket if not already specified
-            if "type:ticket" not in query:
-                query = f"type:ticket {query}"
-            
-            search_results = self.client.search(
-                query=query,
-                sort_by=sort_by,
-                sort_order=sort_order
-            )
-            
-            tickets = []
-            for ticket in list(search_results)[:limit]:
-                ticket_data = {
-                    "id": getattr(ticket, 'id', None),
-                    "subject": getattr(ticket, 'subject', 'No subject'),  # Full subject
-                    "description": getattr(ticket, 'description', ''),  # Full description
-                    "status": getattr(ticket, 'status', None),
-                    "priority": getattr(ticket, 'priority', None),
-                    "type": getattr(ticket, 'type', None),
-                    "created_at": getattr(ticket, 'created_at', None),
-                    "updated_at": getattr(ticket, 'updated_at', None),
-                    "requester_id": getattr(ticket, 'requester_id', None),
-                    "assignee_id": getattr(ticket, 'assignee_id', None),
-                    "organization_id": getattr(ticket, 'organization_id', None),
-                    "group_id": getattr(ticket, 'group_id', None),
-                    "tags": getattr(ticket, 'tags', []),
-                    "custom_fields": getattr(ticket, 'custom_fields', [])
-                }
-                tickets.append(ticket_data)
-                
-            return tickets
-            
-        except Exception as e:
-            raise Exception(f"Failed to search tickets (full): {str(e)}")
+
 
     def get_data_limits_info(self) -> Dict[str, Any]:
         """
@@ -5004,51 +5096,89 @@ class ZendeskClient:
                 'standard_limits': {
                     'ticket_comments': '10 comments, 300 chars each',
                     'ticket_audits': '20 audits, 100 chars per value',
-                    'search_tickets': '25 results, 300 char descriptions',
+                    'search_tickets': '20 results by default, configurable up to 100',
                     'search_users': '25 results',
                     'advanced_search': '50 results'
                 },
-                'customization_options': {
-                    'get_ticket_comments': {
-                        'limit': 'Number of comments (default: 10)',
-                        'max_body_length': 'Max comment length (default: 300)',
-                        'include_body': 'Whether to include content (default: true)'
+                'search_tickets_options': {
+                    'limit': {
+                        'description': 'Maximum tickets to return (1-100)',
+                        'default': 20
                     },
-                    'get_ticket_audits': {
-                        'limit': 'Number of audits (default: 20)',
-                        'include_metadata': 'Include metadata (default: false)'
+                    'compact': {
+                        'description': 'Return minimal data for better performance',
+                        'default': True
                     },
-                    'search_tickets': {
-                        'max_description_length': 'Max description length (default: 300)',
-                        'compact': 'Minimal data mode (default: false)'
+                    'include_description': {
+                        'description': 'Include full ticket descriptions',
+                        'default': False
+                    },
+                    'max_response_size': {
+                        'description': 'Auto-truncate if response exceeds this size',
+                        'default': '50KB'
+                    },
+                    'summary_mode': {
+                        'description': 'Return summary statistics instead of full tickets',
+                        'default': False
+                    },
+                    'categorize': {
+                        'description': 'Add automatic categorization to results',
+                        'default': False
                     }
                 },
-                'full_data_methods': {
-                    'get_ticket_comments_full': 'Get complete, untruncated comments',
-                    'get_ticket_audits_full': 'Get complete, untruncated audit history',
-                    'search_tickets_full': 'Get tickets with full descriptions and subjects',
-                    'get_ticket': 'Already returns full data for individual tickets',
-                    'export_search_results': 'Already returns untruncated data for exports'
+                'pagination_support': {
+                    'page': 'Page number for pagination',
+                    'cursor': 'Cursor for continuing from previous results'
                 }
             },
             'usage_recommendations': {
-                'daily_work': 'Use standard methods with default limits',
-                'investigation': 'Increase limits: limit=50, max_body_length=1000',
-                'deep_analysis': 'Use *_full methods but expect large responses',
-                'reporting': 'Use export_search_results for bulk data'
+                'quick_search': {
+                    'description': 'Fast search with minimal data',
+                    'parameters': {
+                        'compact': True,
+                        'limit': 20
+                    }
+                },
+                'detailed_search': {
+                    'description': 'Full ticket details',
+                    'parameters': {
+                        'compact': False,
+                        'include_description': True,
+                        'limit': 50
+                    }
+                },
+                'large_dataset': {
+                    'description': 'Handle large result sets',
+                    'parameters': {
+                        'summary_mode': True,
+                        'categorize': True
+                    }
+                },
+                'analysis': {
+                    'description': 'Detailed analysis with categories',
+                    'parameters': {
+                        'categorize': True,
+                        'include_description': True,
+                        'limit': 100
+                    }
+                }
             },
             'examples': {
-                'more_comments': {
-                    'name': 'get_ticket_comments',
-                    'arguments': {'ticket_id': 12345, 'limit': 25, 'max_body_length': 800}
+                'basic_search': {
+                    'description': 'Simple ticket search',
+                    'call': 'search_tickets("status:open priority:high")'
                 },
-                'full_comments': {
-                    'name': 'get_ticket_comments_full',
-                    'arguments': {'ticket_id': 12345, 'limit': 10}
+                'detailed_search': {
+                    'description': 'Search with full details',
+                    'call': 'search_tickets("status:open", compact=False, include_description=True, limit=50)'
                 },
-                'full_search': {
-                    'name': 'search_tickets_full',
-                    'arguments': {'query': 'status:open', 'limit': 10}
+                'large_dataset': {
+                    'description': 'Handle large result set',
+                    'call': 'search_tickets("status:open", summary_mode=True)'
+                },
+                'categorized_search': {
+                    'description': 'Search with automatic categorization',
+                    'call': 'search_tickets("status:open", categorize=True, limit=100)'
                 }
             }
         }
