@@ -90,10 +90,10 @@ class ZendeskClient:
         )
         self.subdomain = subdomain
         
-        # Response optimization settings
-        self.MAX_RESPONSE_LENGTH = 2000
-        self.DEFAULT_LIMIT = 10
-        self.MAX_LIMIT = 20
+        # Team plan optimized settings - higher limits for better user experience
+        self.MAX_RESPONSE_LENGTH = 4000  # Increased for Team plan
+        self.DEFAULT_LIMIT = 15          # More results by default
+        self.MAX_LIMIT = 50              # Higher ceiling for comprehensive analysis
 
     # =====================================
     # OPTIMIZATION AND CATEGORIZATION UTILITIES
@@ -620,39 +620,41 @@ class ZendeskClient:
     def search_tickets(
         self,
         query: str,
-        limit: int = 20,
-        compact: bool = True,
-        include_description: bool = False,
+        limit: int = 25,                    # Increased default for Team plan
+        compact: bool = False,              # Default to detailed responses
+        include_description: bool = True,   # Include descriptions by default
         sort_by: str = "created_at",
         sort_order: str = "desc",
         max_response_size: Optional[int] = None,
         summary_mode: bool = False,
-        categorize: bool = False,
+        categorize: bool = True,            # Enable categorization by default
         page: int = 1,
-        cursor: Optional[str] = None
+        cursor: Optional[str] = None,
+        enrich: bool = False                # New: Add enrichment option
     ) -> Dict[str, Any]:
         """
-        Unified ticket search with intelligent response management.
+        Unified ticket search optimized for Claude Team plan with comprehensive data.
         
         Args:
             query: Zendesk search query string
-            limit: Maximum tickets to return (1-100)
-            compact: Return minimal data for better performance
-            include_description: Include full ticket descriptions
+            limit: Maximum tickets to return (1-100, default: 25 for Team plan)
+            compact: Return minimal data (default: False for detailed responses)
+            include_description: Include full ticket descriptions (default: True)
             sort_by: Field to sort by (created_at, updated_at, priority, status)
             sort_order: Sort direction (asc/desc)
             max_response_size: Auto-truncate if response exceeds this size
             summary_mode: Return summary statistics instead of full tickets
-            categorize: Add automatic categorization to results
+            categorize: Add automatic categorization to results (default: True)
             page: Page number for pagination
             cursor: Cursor for continuing from previous results
+            enrich: Add user and organization details to each ticket
             
         Returns:
-            Intelligent response based on parameters and data size:
-            - Full results when within size limits
-            - Truncated results with pagination when too large
-            - Summary statistics when summary_mode=True
-            - Category analysis when categorize=True
+            Comprehensive response optimized for Team plan usage:
+            - Detailed results with descriptions and categorization by default
+            - Rich metadata and analysis
+            - Optional enrichment with user/org data
+            - Intelligent size management with higher thresholds
         """
         try:
             # Set defaults
@@ -724,6 +726,32 @@ class ZendeskClient:
                 
                 if categorize:
                     ticket_data['category'] = self._categorize_ticket(ticket)
+                
+                # Team plan enhancement: Add enrichment data if requested
+                if enrich:
+                    try:
+                        # Add user details
+                        if ticket_data.get('requester_id'):
+                            user_details = self.get_user_by_id(ticket_data['requester_id'])
+                            if user_details and 'error' not in user_details:
+                                ticket_data['requester_details'] = {
+                                    'name': user_details.get('name', 'Unknown'),
+                                    'email': user_details.get('email', 'Unknown'),
+                                    'role': user_details.get('role', 'end-user'),
+                                    'organization_id': user_details.get('organization_id')
+                                }
+                        
+                        # Add assignee details
+                        if ticket_data.get('assignee_id'):
+                            assignee_details = self.get_user_by_id(ticket_data['assignee_id'])
+                            if assignee_details and 'error' not in assignee_details:
+                                ticket_data['assignee_details'] = {
+                                    'name': assignee_details.get('name', 'Unknown'),
+                                    'email': assignee_details.get('email', 'Unknown')
+                                }
+                    except Exception:
+                        # Don't fail the whole request if enrichment fails
+                        pass
                     
                 processed_tickets.append(ticket_data)
             
@@ -738,7 +766,8 @@ class ZendeskClient:
                     'page': page,
                     'sort_by': sort_by,
                     'include_description': include_description,
-                    'categorize': categorize
+                    'categorize': categorize,
+                    'enrich': enrich
                 }
             }
             
@@ -789,6 +818,142 @@ class ZendeskClient:
             category = self._categorize_ticket(ticket)
             counts[category] = counts.get(category, 0) + 1
         return counts
+
+    def comprehensive_ticket_analysis(self, ticket_id: int) -> Dict[str, Any]:
+        """
+        Team plan optimized: Complete ticket analysis with all related data.
+        
+        Args:
+            ticket_id: The ticket ID to analyze
+            
+        Returns:
+            Comprehensive analysis including ticket, comments, audits, and context
+        """
+        try:
+            # Get core ticket data
+            ticket = self.get_ticket(ticket_id)
+            if 'error' in ticket:
+                return ticket
+            
+            # Get comprehensive context (Team plan can handle this)
+            comments = self.get_ticket_comments(ticket_id, limit=50)
+            audits = self.get_ticket_audits(ticket_id, limit=30)
+            
+            # Get user and organization context
+            user_context = {}
+            org_context = {}
+            
+            if ticket.get('requester_id'):
+                user_context = self.get_user_by_id(ticket['requester_id'])
+                if user_context.get('organization_id'):
+                    try:
+                        org_context = self.get_organization_details(user_context['organization_id'])
+                    except:
+                        org_context = {}
+            
+            # Generate insights
+            analysis = {
+                'ticket_overview': {
+                    'id': ticket_id,
+                    'subject': ticket.get('subject', ''),
+                    'status': ticket.get('status', ''),
+                    'priority': ticket.get('priority', ''),
+                    'created_at': ticket.get('created_at', ''),
+                    'category': self._categorize_ticket_from_data(ticket)
+                },
+                'activity_summary': {
+                    'total_comments': len(comments) if isinstance(comments, list) else 0,
+                    'total_audits': len(audits) if isinstance(audits, list) else 0,
+                    'last_activity': ticket.get('updated_at', ''),
+                    'resolution_time': self._calculate_resolution_time(ticket)
+                },
+                'stakeholders': {
+                    'requester': user_context.get('name', 'Unknown') if user_context else 'Unknown',
+                    'assignee_id': ticket.get('assignee_id'),
+                    'organization': org_context.get('name', 'Unknown') if org_context else 'Unknown'
+                },
+                'recommendations': self._generate_ticket_recommendations_detailed(ticket, comments),
+                'next_actions': self._suggest_next_actions(ticket, comments)
+            }
+            
+            return {
+                'analysis': analysis,
+                'raw_data': {
+                    'ticket': ticket,
+                    'recent_comments': comments[:5] if isinstance(comments, list) else [],
+                    'recent_audits': audits[:5] if isinstance(audits, list) else []
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'error': f'Failed to perform comprehensive analysis: {str(e)}',
+                'ticket_id': ticket_id
+            }
+    
+    def _categorize_ticket_from_data(self, ticket_data: Dict[str, Any]) -> str:
+        """Helper to categorize from ticket data dict"""
+        # Create a mock object for categorization
+        class MockTicket:
+            def __init__(self, data):
+                self.subject = data.get('subject', '')
+                self.description = data.get('description', '')
+                self.tags = data.get('tags', [])
+        
+        return self._categorize_ticket(MockTicket(ticket_data))
+    
+    def _calculate_resolution_time(self, ticket: Dict[str, Any]) -> Optional[str]:
+        """Calculate time to resolution if ticket is closed"""
+        if ticket.get('status') in ['closed', 'solved']:
+            created = ticket.get('created_at')
+            updated = ticket.get('updated_at')
+            if created and updated:
+                try:
+                    from datetime import datetime
+                    created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                    updated_dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                    delta = updated_dt - created_dt
+                    return f"{delta.days} days, {delta.seconds // 3600} hours"
+                except:
+                    pass
+        return None
+    
+    def _generate_ticket_recommendations_detailed(self, ticket: Dict[str, Any], comments: List[Any]) -> List[str]:
+        """Generate detailed recommendations for ticket management"""
+        recommendations = []
+        
+        status = ticket.get('status', '')
+        priority = ticket.get('priority', '')
+        
+        if status == 'new':
+            recommendations.append("Assign agent and set initial response")
+        elif status == 'open' and not ticket.get('assignee_id'):
+            recommendations.append("Assign to appropriate agent")
+        elif status == 'pending':
+            recommendations.append("Follow up on customer response")
+        
+        if priority == 'urgent' and len(comments) == 0:
+            recommendations.append("Urgent ticket requires immediate attention")
+        elif len(comments) > 10:
+            recommendations.append("Consider escalating - high activity ticket")
+        
+        return recommendations
+    
+    def _suggest_next_actions(self, ticket: Dict[str, Any], comments: List[Any]) -> List[str]:
+        """Suggest specific next actions"""
+        actions = []
+        
+        if ticket.get('status') == 'open':
+            actions.append("Review latest customer response")
+            actions.append("Update ticket status if resolved")
+        
+        if not ticket.get('assignee_id'):
+            actions.append("Assign to appropriate team member")
+        
+        if len(comments) == 0 and ticket.get('status') != 'new':
+            actions.append("Add initial response to customer")
+        
+        return actions
 
     def get_ticket_counts(self) -> Dict[str, Any]:
         """

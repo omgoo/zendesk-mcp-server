@@ -657,17 +657,35 @@ Arguments: {
 ```
 **Use Case**: Compliance audit - get complete, untruncated audit trail with full metadata (WARNING: large data).
 
-### Search with Full Descriptions
+### Team Plan Optimized Search (Default)
+```
+Request: search_tickets
+Arguments: {
+  "query": "status:open priority:high"
+}
+```
+**Use Case**: Team plan default - detailed responses with descriptions, categorization, and higher limits (25 tickets).
+
+### Enhanced Search with Enrichment
 ```
 Request: search_tickets
 Arguments: {
   "query": "status:open priority:high",
-  "limit": 10,
-  "compact": false,
-  "include_description": true
+  "limit": 30,
+  "enrich": true,
+  "categorize": true
 }
 ```
-**Use Case**: Detailed investigation - search tickets with complete subjects and descriptions. Uses intelligent size management.
+**Use Case**: Comprehensive investigation - tickets with user/org details and automatic categorization.
+
+### Comprehensive Ticket Analysis
+```
+Request: comprehensive_ticket_analysis
+Arguments: {
+  "ticket_id": 12345
+}
+```
+**Use Case**: Complete ticket investigation - combines ticket, comments, audits, stakeholder info, and recommendations.
 
 ## 📚 **Knowledge Base Integration**
 

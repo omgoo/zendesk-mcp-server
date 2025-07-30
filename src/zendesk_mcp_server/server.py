@@ -340,7 +340,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="search_tickets", 
-            description="Unified ticket search with intelligent response management. Supports pagination, categorization, and smart size handling.",
+            description="Team plan optimized: Comprehensive ticket search with detailed responses, enrichment, and smart analysis.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -350,20 +350,20 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum tickets to return (1-100, default: 20)",
-                        "default": 20,
+                        "description": "Maximum tickets to return (1-100, default: 25 for Team plan)",
+                        "default": 25,
                         "minimum": 1,
                         "maximum": 100
                     },
                     "compact": {
                         "type": "boolean",
-                        "description": "Return minimal data for better performance",
-                        "default": True
+                        "description": "Return minimal data (default: False for detailed responses)",
+                        "default": False
                     },
                     "include_description": {
                         "type": "boolean",
-                        "description": "Include full ticket descriptions",
-                        "default": False
+                        "description": "Include full ticket descriptions (default: True)",
+                        "default": True
                     },
                     "sort_by": {
                         "type": "string", 
@@ -377,8 +377,8 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "max_response_size": {
                         "type": "integer",
-                        "description": "Auto-truncate if response exceeds this size (in bytes)",
-                        "default": 50000
+                        "description": "Auto-truncate if response exceeds this size (default: 4000 for Team plan)",
+                        "default": 4000
                     },
                     "summary_mode": {
                         "type": "boolean",
@@ -387,7 +387,12 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "categorize": {
                         "type": "boolean",
-                        "description": "Add automatic categorization to results",
+                        "description": "Add automatic categorization to results (default: True)",
+                        "default": True
+                    },
+                    "enrich": {
+                        "type": "boolean",
+                        "description": "Add user and organization details to each ticket",
                         "default": False
                     },
                     "page": {
@@ -402,6 +407,20 @@ async def handle_list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["query"]
+            }
+        ),
+        types.Tool(
+            name="comprehensive_ticket_analysis",
+            description="Team plan optimized: Complete ticket analysis with comments, audits, stakeholders, and actionable insights.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticket_id": {
+                        "type": "integer",
+                        "description": "The ticket ID to analyze comprehensively"
+                    }
+                },
+                "required": ["ticket_id"]
             }
         ),
         types.Tool(
@@ -1489,22 +1508,33 @@ async def handle_call_tool(
             if not arguments or "query" not in arguments:
                 raise ValueError("Missing required argument: query")
             
-            # Extract all possible parameters with defaults
+            # Extract all possible parameters with Team plan optimized defaults
             result = zendesk_client.search_tickets(
                 query=arguments["query"],
-                limit=arguments.get("limit", 20),
-                compact=arguments.get("compact", True),
-                include_description=arguments.get("include_description", False),
+                limit=arguments.get("limit", 25),
+                compact=arguments.get("compact", False),
+                include_description=arguments.get("include_description", True),
                 sort_by=arguments.get("sort_by", "created_at"),
                 sort_order=arguments.get("sort_order", "desc"),
-                max_response_size=arguments.get("max_response_size", 50000),
+                max_response_size=arguments.get("max_response_size", 4000),
                 summary_mode=arguments.get("summary_mode", False),
-                categorize=arguments.get("categorize", False),
+                categorize=arguments.get("categorize", True),
+                enrich=arguments.get("enrich", False),
                 page=arguments.get("page", 1),
                 cursor=arguments.get("cursor")
             )
             
             # Response is already size-managed by the new implementation
+            return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "comprehensive_ticket_analysis":
+            if not arguments or "ticket_id" not in arguments:
+                raise ValueError("Missing required argument: ticket_id")
+            
+            result = zendesk_client.comprehensive_ticket_analysis(
+                ticket_id=arguments["ticket_id"]
+            )
+            
             return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
 
         elif name == "get_ticket_counts":

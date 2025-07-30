@@ -160,11 +160,11 @@ Add this configuration to your Claude Desktop settings file:
 # Get ticket information
 "Show me ticket #12345"
 
-# Search for tickets (with various options)
+# Search for tickets (Team plan optimized defaults)
 "Find all high priority tickets created in the last week"
-"Show me a summary of all open tickets"
-"Search tickets and categorize them by type"
-"Find tickets with full details including descriptions"
+"Show me a detailed analysis of open tickets with user info"
+"Search tickets with automatic categorization and enrichment"
+"Get comprehensive ticket analysis with all context"
 
 # Check agent performance  
 "What's the performance of agent John Smith this month?"
@@ -253,14 +253,17 @@ priority:high OR priority:urgent
 subject:*password* email:*@domain.com
 ```
 
-## ⚡ Performance Features
+## ⚡ Performance Features (Team Plan Optimized)
 
-- **Smart Size Management:** Intelligent response size handling with automatic truncation
+- **Team Plan Optimized:** Higher default limits and detailed responses for Claude Team plan users
+- **Smart Size Management:** Intelligent response size handling (4KB default, up from 2KB)
 - **Rich Metadata:** Comprehensive metadata about data availability and truncation
-- **Dynamic Pagination:** Cursor-based pagination with configurable page sizes
-- **Automatic Categorization:** ML-based ticket categorization for better organization
-- **Summary Mode:** Statistical summaries for large datasets
-- **Caching:** Knowledge base articles are cached for improved performance
+- **Dynamic Pagination:** Cursor-based pagination with configurable page sizes (25 default, up to 50)
+- **Automatic Categorization:** ML-based ticket categorization enabled by default
+- **Data Enrichment:** Optional user and organization details for comprehensive context
+- **Comprehensive Analysis:** Multi-tool workflows for complete ticket investigation
+- **Summary Mode:** Statistical summaries for large datasets when needed
+- **Caching Benefits:** Leverages Claude Team plan caching for repeated data access
 - **Rate Limiting:** Built-in Zendesk API rate limit compliance
 - **Error Handling:** Comprehensive error handling and retry logic
 - **Bulk Operations:** Efficient batch processing for large operations
@@ -269,9 +272,10 @@ subject:*password* email:*@domain.com
 
 The server provides **55+ tools** organized by category:
 
-### Core Operations (10 tools)
+### Core Operations (11 tools)
 - `get_ticket`, `get_ticket_comments`, `create_ticket_comment`
-- `search_tickets` - Unified search with smart size management and categorization
+- `search_tickets` - Team plan optimized: Detailed search with enrichment and categorization
+- `comprehensive_ticket_analysis` - NEW: Complete multi-tool ticket analysis
 - `get_ticket_counts`, `get_ticket_metrics`
 - `get_user_tickets`, `get_organization_tickets`
 - `get_satisfaction_ratings`, `get_agent_performance`, `get_user_by_id`
