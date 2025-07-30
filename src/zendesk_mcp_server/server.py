@@ -1431,35 +1431,6 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["ticket_id"]
             }
-        ),
-        types.Tool(
-            name="search_tickets_full",
-            description="Search for tickets with full, untruncated data including complete descriptions. WARNING: May return large amounts of data - use only when you need complete ticket details.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query (e.g., 'status:open', 'priority:urgent')"
-                    },
-                    "sort_by": {
-                        "type": "string",
-                        "description": "Field to sort by (created_at, updated_at, priority, status)",
-                        "default": "created_at"
-                    },
-                    "sort_order": {
-                        "type": "string",
-                        "description": "Sort order (asc or desc)",
-                        "default": "desc"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of tickets to return (default: 50)",
-                        "default": 50
-                    }
-                },
-                "required": ["query"]
-            }
         )
     ]
 

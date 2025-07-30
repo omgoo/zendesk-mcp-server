@@ -659,13 +659,15 @@ Arguments: {
 
 ### Search with Full Descriptions
 ```
-Request: search_tickets_full
+Request: search_tickets
 Arguments: {
   "query": "status:open priority:high",
-  "limit": 10
+  "limit": 10,
+  "compact": false,
+  "include_description": true
 }
 ```
-**Use Case**: Detailed investigation - search tickets with complete subjects and descriptions (WARNING: large data).
+**Use Case**: Detailed investigation - search tickets with complete subjects and descriptions. Uses intelligent size management.
 
 ## 📚 **Knowledge Base Integration**
 
