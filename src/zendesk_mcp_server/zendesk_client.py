@@ -1,11 +1,74 @@
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TypeVar, Generic, Union
+from dataclasses import dataclass
 import urllib.parse
 from datetime import datetime
 from zenpy import Zenpy
 from zenpy.lib.api_objects import Comment
 from cachetools import TTLCache
+
+T = TypeVar('T')
+
+@dataclass
+class PaginatedResponse(Generic[T]):
+    """Base class for paginated responses with metadata"""
+    data: T
+    total_count: int
+    page_size: int
+    current_page: int
+    has_more: bool
+    next_cursor: Optional[str]
+    estimated_size: int
+    summary: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+    @classmethod
+    def create(cls, 
+               data: T,
+               total_count: int,
+               page_size: int,
+               current_page: int = 1,
+               next_cursor: Optional[str] = None,
+               summary: Optional[Dict[str, Any]] = None,
+               metadata: Optional[Dict[str, Any]] = None) -> 'PaginatedResponse[T]':
+        """Factory method to create a paginated response with calculated fields"""
+        if isinstance(data, list):
+            estimated_size = len(str(data)) if data else 0
+        else:
+            estimated_size = len(str(data))
+            
+        has_more = (current_page * page_size) < total_count
+        
+        return cls(
+            data=data,
+            total_count=total_count,
+            page_size=page_size,
+            current_page=current_page,
+            has_more=has_more,
+            next_cursor=next_cursor,
+            estimated_size=estimated_size,
+            summary=summary or {},
+            metadata=metadata or {}
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the response to a dictionary format"""
+        return {
+            'data': self.data,
+            'pagination': {
+                'total_count': self.total_count,
+                'page_size': self.page_size,
+                'current_page': self.current_page,
+                'has_more': self.has_more,
+                'next_cursor': self.next_cursor
+            },
+            'metadata': {
+                'estimated_size': self.estimated_size,
+                **self.metadata
+            },
+            'summary': self.summary
+        }
 
 
 class ZendeskClient:
@@ -36,30 +99,132 @@ class ZendeskClient:
     # OPTIMIZATION UTILITIES
     # =====================================
     
-    def _limit_response_size(self, data: Any, max_length: int = None) -> str:
+    def _limit_response_size(self, data: Any, max_length: int = None) -> Union[str, Dict[str, Any]]:
         """
-        Limit response size and add truncation notice if needed.
+        Smart response size limiting with pagination and metadata.
+        Returns either a JSON string for simple responses or a PaginatedResponse for complex data.
         """
         if max_length is None:
             max_length = self.MAX_RESPONSE_LENGTH
+
+        # Handle PaginatedResponse objects
+        if isinstance(data, PaginatedResponse):
+            return data.to_dict()
             
+        # Convert to string for size estimation
         response = json.dumps(data, indent=2)
+        response_length = len(response)
         
-        if len(response) <= max_length:
+        # If response is small enough, return as is
+        if response_length <= max_length:
             return response
+
+        # For list data, create paginated response
+        if isinstance(data, list):
+            total_items = len(data)
+            page_size = self._calculate_optimal_page_size(data, max_length)
+            first_page = data[:page_size]
             
-        # Truncate and add notice
-        truncated = response[:max_length-200]  # Leave room for truncation message
+            return PaginatedResponse.create(
+                data=first_page,
+                total_count=total_items,
+                page_size=page_size,
+                summary=self._generate_summary(data),
+                metadata={
+                    'total_size': response_length,
+                    'truncated_size': len(json.dumps(first_page, indent=2))
+                }
+            ).to_dict()
+            
+        # For dict data with known list fields
+        elif isinstance(data, dict):
+            for key in ['tickets', 'users', 'organizations', 'results']:
+                if key in data and isinstance(data[key], list):
+                    items = data[key]
+                    total_items = len(items)
+                    page_size = self._calculate_optimal_page_size(items, max_length)
+                    first_page = items[:page_size]
+                    
+                    # Preserve other dict fields in metadata
+                    metadata = {k: v for k, v in data.items() if k != key}
+                    metadata.update({
+                        'total_size': response_length,
+                        'truncated_size': len(json.dumps(first_page, indent=2))
+                    })
+                    
+                    return PaginatedResponse.create(
+                        data={key: first_page},
+                        total_count=total_items,
+                        page_size=page_size,
+                        summary=self._generate_summary(items),
+                        metadata=metadata
+                    ).to_dict()
         
-        # Try to cut at a reasonable point (end of line)
+        # Fallback to simple truncation for other cases
+        truncated = response[:max_length-200]
         last_newline = truncated.rfind('\n')
         if last_newline > max_length * 0.8:
             truncated = truncated[:last_newline]
             
-        truncation_msg = f"\n\n... (truncated, {len(response) - len(truncated)} characters omitted)\n\nResponse too large. Use specific IDs or filters for detailed data.\nTotal results available: {self._count_items(data)}"
-        
-        return truncated + truncation_msg
+        return truncated + f"\n\n... (truncated, {response_length - len(truncated)} characters omitted)"
     
+    def _calculate_optimal_page_size(self, data: List[Any], max_length: int) -> int:
+        """
+        Calculate optimal page size based on data size and max length.
+        """
+        if not data:
+            return self.DEFAULT_LIMIT
+            
+        # Estimate size per item
+        sample_item = data[0]
+        item_size = len(json.dumps(sample_item, indent=2))
+        
+        # Calculate how many items we can fit
+        # Account for pagination metadata overhead (roughly 200 chars)
+        available_space = max_length - 200
+        optimal_size = max(1, min(
+            len(data),  # Don't exceed total items
+            available_space // item_size,  # Size-based limit
+            self.MAX_LIMIT  # Hard limit
+        ))
+        
+        return optimal_size
+        
+    def _generate_summary(self, data: List[Any]) -> Dict[str, Any]:
+        """
+        Generate a summary of the full dataset.
+        """
+        if not data:
+            return {}
+            
+        summary: Dict[str, Any] = {
+            'total_items': len(data)
+        }
+        
+        # For tickets
+        if hasattr(data[0], 'status'):
+            status_counts = {}
+            priority_counts = {}
+            for item in data:
+                status = getattr(item, 'status', 'unknown')
+                priority = getattr(item, 'priority', 'none')
+                status_counts[status] = status_counts.get(status, 0) + 1
+                priority_counts[priority] = priority_counts.get(priority, 0) + 1
+            summary.update({
+                'status_distribution': status_counts,
+                'priority_distribution': priority_counts
+            })
+            
+        # For users
+        elif hasattr(data[0], 'role'):
+            role_counts = {}
+            for item in data:
+                role = getattr(item, 'role', 'unknown')
+                role_counts[role] = role_counts.get(role, 0) + 1
+            summary['role_distribution'] = role_counts
+            
+        return summary
+        
     def _count_items(self, data: Any) -> str:
         """Count items in response data for truncation messages."""
         if isinstance(data, dict):
@@ -357,38 +522,65 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to post comment on ticket {ticket_id}: {str(e)}")
 
-    def search_tickets(self, query: str, sort_by: str = "created_at", sort_order: str = "desc", compact: bool = True, limit: Optional[int] = None, summarize: bool = False) -> Dict[str, Any]:
+    def search_tickets(
+        self,
+        query: str,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        compact: bool = True,
+        limit: Optional[int] = None,
+        page: int = 1,
+        cursor: Optional[str] = None,
+        summarize: bool = False
+    ) -> Dict[str, Any]:
         """
-        Search for tickets using the Zendesk Search API with optimized data limits.
+        Search for tickets using the Zendesk Search API with smart pagination.
         
         Args:
-            query: Search query string
-            sort_by: Field to sort by (created_at, updated_at, priority, status, etc.)
-            sort_order: Sort order (asc or desc)
-            compact: If True, returns minimal data without descriptions for better performance (default: True)
-            limit: Maximum number of tickets to return (default: 10, max: 20)
-            summarize: If True, returns summary instead of full ticket list
+            query: Search query string using Zendesk Search syntax
+            sort_by: Field to sort by (default: created_at)
+            sort_order: Sort direction - asc or desc (default: desc)
+            compact: Return compact ticket format (default: True)
+            limit: Maximum number of tickets per page (default: 10, max: 20)
+            page: Page number to fetch (default: 1)
+            cursor: Pagination cursor from previous response
+            summarize: Include ticket summary stats (default: False)
+            
+        Returns:
+            PaginatedResponse containing:
+            - data: List of tickets for current page
+            - pagination: Information about total results and next page
+            - summary: Statistical summary of all matching tickets
+            - metadata: Additional context about the search
         """
         try:
-            # Apply default limit
-            limit = self._apply_limit(limit)
+            # Apply default limit and ensure valid page
+            page_size = self._apply_limit(limit)
+            page = max(1, page)
             
             # Ensure the query includes type:ticket if not already specified
             if "type:ticket" not in query:
                 query = f"type:ticket {query}"
             
+            # Execute search
             search_results = self.client.search(
                 query=query,
                 sort_by=sort_by,
                 sort_order=sort_order
             )
             
-            # Convert to list and apply limit
+            # Convert generator to list for processing
             all_tickets = list(search_results)
-            limited_tickets = all_tickets[:limit]
+            total_tickets = len(all_tickets)
             
+            # Calculate pagination
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            page_tickets = all_tickets[start_idx:end_idx]
+            
+            # Process tickets for current page
             tickets = []
-            for ticket in limited_tickets:
+            for ticket in page_tickets:
                 if compact:
                     tickets.append(self._compact_ticket(ticket))
                 else:
@@ -412,36 +604,45 @@ class ZendeskClient:
                     
                     # Include truncated description
                     description = getattr(ticket, 'description', '')
-                    if len(description) > 200:
+                    if description and len(description) > 200:
                         description = description[:197] + "..."
                     ticket_data["description"] = description
                     
                     tickets.append(ticket_data)
             
-            # Prepare response
-            response_data = {
-                "query": query,
-                "total_found": len(all_tickets),
-                "showing": len(tickets),
-                "compact_mode": compact,
-                "tickets": tickets
-            }
-            
-            # Add truncation warning if needed
-            if len(all_tickets) > limit:
-                response_data["note"] = f"Showing first {limit} of {len(all_tickets)} results. Use more specific query or get_ticket for details."
-            
-            # Return summary if requested
+            # Generate summary of all tickets if requested
+            summary = None
             if summarize:
-                summary = self.summarize_tickets(tickets)
+                summary = self.summarize_tickets(all_tickets)
                 summary["query"] = query
-                summary["total_found"] = len(all_tickets)
-                return summary
                 
-            return response_data
+            # Calculate next cursor (based on last ticket ID)
+            next_cursor = None
+            if end_idx < total_tickets and page_tickets:
+                last_ticket = page_tickets[-1]
+                next_cursor = str(getattr(last_ticket, 'id', None))
+            
+            # Create paginated response
+            response = PaginatedResponse.create(
+                data={"tickets": tickets},
+                total_count=total_tickets,
+                page_size=page_size,
+                current_page=page,
+                next_cursor=next_cursor,
+                summary=summary,
+                metadata={
+                    "query": query,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order,
+                    "compact": compact,
+                    "estimated_total_size": len(str(all_tickets)),
+                    "current_page_size": len(str(tickets))
+                }
+            )
+            
+            return response.to_dict()
             
         except Exception as e:
-            # Improve error messaging for different types of failures
             error_msg = str(e)
             if "SSL" in error_msg or "ssl" in error_msg.lower():
                 raise Exception(f"SSL connection error. Check your ZENDESK_SUBDOMAIN setting. Original error: {error_msg}")
