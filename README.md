@@ -160,8 +160,11 @@ Add this configuration to your Claude Desktop settings file:
 # Get ticket information
 "Show me ticket #12345"
 
-# Search for tickets
+# Search for tickets (with various options)
 "Find all high priority tickets created in the last week"
+"Show me a summary of all open tickets"
+"Search tickets and categorize them by type"
+"Find tickets with full details including descriptions"
 
 # Check agent performance  
 "What's the performance of agent John Smith this month?"
@@ -209,7 +212,19 @@ The server supports Zendesk's powerful search syntax:
 
 ### Ticket Searches
 ```
+# Basic search
 status:open priority:high
+
+# With categorization
+status:open categorize:true
+
+# With full details
+status:open include_description:true compact:false
+
+# Summary mode for large datasets
+status:open summary_mode:true
+
+# Advanced filtering
 type:incident created>2024-01-01
 assignee:john@company.com tags:billing
 organization:"Acme Corp" updated<2024-12-01
@@ -240,8 +255,12 @@ subject:*password* email:*@domain.com
 
 ## ⚡ Performance Features
 
+- **Smart Size Management:** Intelligent response size handling with automatic truncation
+- **Rich Metadata:** Comprehensive metadata about data availability and truncation
+- **Dynamic Pagination:** Cursor-based pagination with configurable page sizes
+- **Automatic Categorization:** ML-based ticket categorization for better organization
+- **Summary Mode:** Statistical summaries for large datasets
 - **Caching:** Knowledge base articles are cached for improved performance
-- **Pagination:** Automatic handling of large result sets
 - **Rate Limiting:** Built-in Zendesk API rate limit compliance
 - **Error Handling:** Comprehensive error handling and retry logic
 - **Bulk Operations:** Efficient batch processing for large operations
@@ -250,9 +269,10 @@ subject:*password* email:*@domain.com
 
 The server provides **55+ tools** organized by category:
 
-### Core Operations (11 tools)
+### Core Operations (10 tools)
 - `get_ticket`, `get_ticket_comments`, `create_ticket_comment`
-- `search_tickets`, `get_ticket_counts`, `get_ticket_metrics`
+- `search_tickets` - Unified search with smart size management and categorization
+- `get_ticket_counts`, `get_ticket_metrics`
 - `get_user_tickets`, `get_organization_tickets`
 - `get_satisfaction_ratings`, `get_agent_performance`, `get_user_by_id`
 
